@@ -264,6 +264,7 @@ router.post(
       end_date: end,
       due_times: ['17:00'],
       created_by: req.user!.id,
+      plan_id: plan.insertId,
     });
     ok(res, { id: plan.insertId });
   })

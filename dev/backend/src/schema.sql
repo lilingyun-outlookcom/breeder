@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   assignee_id INT NOT NULL,
   status ENUM('pending','processing','done') DEFAULT 'pending',
   remark VARCHAR(500) DEFAULT '',
+  plan_id INT NULL,
   created_by INT NULL,
   created_at DATETIME,
   done_at DATETIME NULL,

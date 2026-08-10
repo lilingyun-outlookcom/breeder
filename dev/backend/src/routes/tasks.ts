@@ -50,6 +50,7 @@ export async function generateTaskRows(p: {
   due_times: string[];
   created_by?: number | null;
   group_id?: number | null;
+  plan_id?: number | null;
 }): Promise<number> {
   const end = p.end_date || p.start_date;
   const dates = p.task_type === 'once' ? [p.start_date] : dateRange(p.start_date, end);
@@ -62,8 +63,8 @@ export async function generateTaskRows(p: {
         `INSERT INTO tasks
          (group_id, task_type, title, cage_id, animal_id, feed_id, medicine_id,
           quantity, quantity_unit, task_date, due_time, due_at, assignee_id,
-          status, remark, created_by, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          status, remark, plan_id, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           p.group_id,
           p.task_type,
@@ -80,6 +81,7 @@ export async function generateTaskRows(p: {
           p.assignee_id,
           'pending',
           p.remark || '',
+          p.plan_id ?? null,
           p.created_by ?? null,
           nowStr(),
         ]
@@ -215,6 +217,22 @@ router.delete(
     await execute('DELETE FROM tasks WHERE group_id=?', [id]);
     await execute('DELETE FROM task_groups WHERE id=?', [id]);
     ok(res, '已删除该批次全部任务');
+  })
+);
+
+/* ============ 单任务详情（饲养员/后台） ============ */
+router.get(
+  '/:id',
+  ah(async (req, res) => {
+    const id = int(req.params.id);
+    if (!id) return fail(res, '参数错误');
+    const t = await qOne<any>(TASK_SELECT + ' WHERE t.id=?', [id]);
+    if (!t) return fail(res, '任务不存在');
+    if (req.user!.role === 'keeper' && t.assignee_id !== req.user!.id) {
+      return fail(res, '该任务不属于你', 403);
+    }
+    const now = nowStr();
+    ok(res, { ...t, is_overdue: t.status !== 'done' && t.due_at < now });
   })
 );
 

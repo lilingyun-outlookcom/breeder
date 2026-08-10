@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { q, qOne, execute } from '../db';
 import { requireAuth } from '../auth';
 import { ok, fail, ah, int } from './helpers';
-import { nowStr, todayStr, parseNum } from '../util';
+import { nowStr, parseNum } from '../util';
 
 const router = Router();
 router.use(requireAuth);
@@ -233,5 +233,4 @@ router.get(
   })
 );
 
-export { todayStr };
 export default router;
