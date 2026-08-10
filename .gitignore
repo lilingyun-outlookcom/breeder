@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+public/
+*.tsbuildinfo
+
+# env & secrets
+.env
+*.env
+!.env.example
+
+# logs
+*.log
+logs/
+
+# uploads
+uploads/
+
+# legacy placeholder servers (superseded by real app)
+dev/server/
+prod/server/
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/
