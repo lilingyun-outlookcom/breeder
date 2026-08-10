@@ -27,13 +27,13 @@ cd ${DEV_DIR}/backend
 npm install --no-audit --no-fund >/dev/null 2>&1 || npm install --no-audit --no-fund
 npm run build
 
-# 2. 构建前端 dev 版本(base=/dev/)
+# 2. 构建前端 dev 版本(base=/dev/，输出到 backend/public)
 echo "[2/6] 构建前端 dev 版本..."
 cd ${DEV_DIR}/frontend
 npm install --no-audit --no-fund >/dev/null 2>&1 || true
 npm run build:dev
 
-# 3. 构建前端 prod 版本(base=/prod/)
+# 3. 构建前端 prod 版本(base=/prod/，输出到 frontend/dist-prod)
 echo "[3/6] 构建前端 prod 版本..."
 npm run build:prod
 
@@ -41,7 +41,7 @@ npm run build:prod
 echo "[4/6] 同步到生产目录..."
 rsync -av --delete --exclude=node_modules --exclude=.git --exclude=.env --exclude=public \
   ${DEV_DIR}/backend/ ${PROD_DIR}/backend/
-rsync -av --delete ${DEV_DIR}/backend/public/ ${PROD_DIR}/backend/public/
+rsync -av --delete ${DEV_DIR}/frontend/dist-prod/ ${PROD_DIR}/backend/public/
 
 # 5. 安装生产依赖
 echo "[5/6] 安装生产依赖..."

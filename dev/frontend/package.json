@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build:dev": "VITE_BASE_PATH=/dev/ vite build",
-    "build:prod": "VITE_BASE_PATH=/prod/ vite build",
+    "build:prod": "VITE_BASE_PATH=/prod/ VITE_OUTDIR=dist-prod vite build",
     "build": "vite build"
   },
   "dependencies": {

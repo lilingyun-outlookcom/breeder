@@ -4,6 +4,7 @@ node_modules/
 # build outputs
 dist/
 public/
+dist-prod/
 *.tsbuildinfo
 
 # env & secrets

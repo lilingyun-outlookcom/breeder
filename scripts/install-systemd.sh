@@ -62,8 +62,8 @@ systemctl daemon-reload
 
 # 2. 停止旧的占位 Node 进程（dev/server、prod/server，占用了 3000/3001）
 echo "[2/5] 停止旧占位进程..."
-pkill -f '/opt/${APP_NAME}/dev/server' 2>/dev/null || true
-pkill -f '/opt/${APP_NAME}/prod/server' 2>/dev/null || true
+pkill -f "/opt/${APP_NAME}/dev/server" 2>/dev/null || true
+pkill -f "/opt/${APP_NAME}/prod/server" 2>/dev/null || true
 sleep 1
 
 # 3. 启动服务

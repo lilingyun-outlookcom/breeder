@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [vue()],
   base: process.env.VITE_BASE_PATH || '/prod/',
   build: {
+    // dev 构建默认输出到 ../backend/public（由后端直接提供）
+    // prod 构建通过 VITE_OUTDIR=../dist-prod 输出，再同步到生产目录
     outDir: process.env.VITE_OUTDIR || '../backend/public',
     emptyOutDir: true,
   },
