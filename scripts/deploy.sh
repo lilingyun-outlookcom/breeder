@@ -1,54 +1,68 @@
 #!/bin/bash
 # ============================================
-# 一键部署: dev -> prod
-# 执行方式: sudo bash /opt/breeder/scripts/deploy.sh
+# 一键部署: dev -> prod（含 dev 环境自身刷新）
+# 用法: sudo bash /opt/breeder/scripts/deploy.sh
+# 前置: MySQL 已初始化(scripts/db-setup.sh)、systemd 服务已安装
 # ============================================
 set -e
+
 APP_NAME="breeder"
 DEV_DIR="/opt/${APP_NAME}/dev"
 PROD_DIR="/opt/${APP_NAME}/prod"
 LOG_DIR="/var/log/${APP_NAME}"
 DEPLOY_LOG="${LOG_DIR}/deploy-$(date +%Y%m%d-%H%M%S).log"
 
+mkdir -p ${LOG_DIR}
 exec > >(tee -a ${DEPLOY_LOG}) 2>&1
 
 echo "========== 部署开始 $(date) =========="
 
+# 0. 前置检查
+command -v node >/dev/null 2>&1 || { echo "✗ 缺少 node"; exit 1; }
+command -v rsync >/dev/null 2>&1 || { echo "✗ 缺少 rsync"; exit 1; }
+
 # 1. 构建后端
-echo "[1/5] 构建后端..."
+echo "[1/6] 构建后端..."
 cd ${DEV_DIR}/backend
-pnpm install 2>/dev/null || npm install
-pnpm build 2>/dev/null || npm run build
+npm install --no-audit --no-fund >/dev/null 2>&1 || npm install --no-audit --no-fund
+npm run build
 
-# 2. 构建前端
-echo "[2/5] 构建前端..."
+# 2. 构建前端 dev 版本(base=/dev/)
+echo "[2/6] 构建前端 dev 版本..."
 cd ${DEV_DIR}/frontend
-pnpm install 2>/dev/null || npm install
-pnpm build 2>/dev/null || npm run build
-# 构建产物会自动输出到 backend/dist (按 vite.config.ts 配置)
+npm install --no-audit --no-fund >/dev/null 2>&1 || true
+npm run build:dev
 
-# 3. 同步到生产环境
-echo "[3/5] 同步到生产目录..."
-rsync -av --delete --exclude=node_modules --exclude=.git \
+# 3. 构建前端 prod 版本(base=/prod/)
+echo "[3/6] 构建前端 prod 版本..."
+npm run build:prod
+
+# 4. 同步到生产目录（排除 node_modules/.git/.env/public，public 单独同步）
+echo "[4/6] 同步到生产目录..."
+rsync -av --delete --exclude=node_modules --exclude=.git --exclude=.env --exclude=public \
   ${DEV_DIR}/backend/ ${PROD_DIR}/backend/
-rsync -av --delete \
-  ${DEV_DIR}/frontend/dist/ ${PROD_DIR}/backend/dist/
+rsync -av --delete ${DEV_DIR}/backend/public/ ${PROD_DIR}/backend/public/
 
-# 4. 安装生产依赖并启动
-echo "[4/5] 安装生产依赖..."
+# 5. 安装生产依赖
+echo "[5/6] 安装生产依赖..."
 cd ${PROD_DIR}/backend
-npm install --production
+npm install --no-audit --no-fund >/dev/null 2>&1 || npm install --no-audit --no-fund
 
-echo "[5/5] 重启 PM2 服务..."
-# 开发环境
-sudo -u breeder bash -c "cd ${DEV_DIR}/backend && pm2 delete breeder-dev 2>/dev/null; PORT=3000 NODE_ENV=development pm2 start dist/index.js --name breeder-dev"
-# 生产环境
-sudo -u breeder bash -c "cd ${PROD_DIR}/backend && pm2 delete breeder-prod 2>/dev/null; PORT=80 NODE_ENV=production pm2 start dist/index.js --name breeder-prod"
+# 6. 重启服务
+echo "[6/6] 重启 systemd 服务..."
+if [ -f /etc/systemd/system/breeder-dev.service ]; then
+  systemctl restart breeder-dev || true
+fi
+if [ -f /etc/systemd/system/breeder-prod.service ]; then
+  systemctl restart breeder-prod || true
+fi
 
-pm2 save
-pm2 startup systemd -u breeder --hp /home/breeder 2>/dev/null || true
+sleep 2
+echo "--- 健康检查 ---"
+curl -s http://127.0.0.1:3000/api/health || echo "dev 未响应"
+curl -s http://127.0.0.1:3001/api/health || echo "prod 未响应"
 
 echo "========== 部署完成 $(date) =========="
-echo "开发环境: http://服务器IP:3000"
-echo "生产环境: http://服务器IP (端口80)"
-echo "日志查看: tail -f ${DEPLOY_LOG}"
+echo "开发环境: https://breeder.sflswall.com.cn/dev/"
+echo "生产环境: https://breeder.sflswall.com.cn/prod/"
+echo "日志: tail -f ${DEPLOY_LOG}"
