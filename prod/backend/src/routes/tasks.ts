@@ -66,7 +66,7 @@ export async function generateTaskRows(p: {
           status, remark, plan_id, created_by, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          p.group_id,
+          p.group_id ?? null,
           p.task_type,
           title,
           p.cage_id ?? null,

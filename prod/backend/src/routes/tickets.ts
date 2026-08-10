@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { q, qOne, execute } from '../db';
 import { requireAuth, requireRole } from '../auth';
 import { ok, fail, ah, int } from './helpers';
-import { nowStr, todayStr, dateRange } from '../util';
+import { nowStr, todayStr, addDays } from '../util';
 import { generateTaskRows } from './tasks';
 
 const router = Router();
@@ -132,7 +132,7 @@ router.post(
     if (!medicineId) return fail(res, '请选择药品');
     const start = String(b.start_date || todayStr());
     const duration = int(b.duration_days) || 1;
-    const end = b.end_date || dateRange(start, start)[0] || start;
+    const end = b.end_date || addDays(start, duration - 1);
 
     const animal = await qOne<any>('SELECT * FROM animals WHERE id=?', [animalId]);
     const assigneeId = int(b.assignee_id) || animal?.keeper_id;

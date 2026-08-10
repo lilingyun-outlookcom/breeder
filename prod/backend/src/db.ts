@@ -49,6 +49,10 @@ export async function qOne<T = any>(sql: string, params: any[] = []): Promise<T 
 }
 
 export async function execute(sql: string, params: any[] = []): Promise<mysql.ResultSetHeader> {
+  const idx = params.findIndex((v) => v === undefined);
+  if (idx >= 0) {
+    throw new Error(`execute: params[${idx}] undefined | sql: ${sql.slice(0, 160)} | params: ${JSON.stringify(params)}`);
+  }
   const [res] = await pool.execute(sql, params);
   return res as mysql.ResultSetHeader;
 }
