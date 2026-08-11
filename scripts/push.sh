@@ -10,6 +10,9 @@ APP_NAME="breeder"
 REPO_URL="https://github.com/lilingyun-outlookcom/breeder.git"
 BRANCH="${1:-master}"
 
+# 非交互环境下禁止 git 弹出用户名/密码交互提示，避免脚本挂起
+export GIT_TERMINAL_PROMPT=0
+
 cd /opt/${APP_NAME}
 
 # 0. 确认是 git 仓库
@@ -46,5 +49,16 @@ fi
 
 # 4. 推送到 GitHub
 echo "推送 ${BRANCH} -> origin/${BRANCH} ..."
-git push -u origin "${BRANCH}"
-echo "✓ 推送完成: https://github.com/${APP_NAME}/${APP_NAME}"
+if git push -u origin "${BRANCH}"; then
+  echo "✓ 推送完成: https://github.com/${APP_NAME}/${APP_NAME}"
+else
+  echo ""
+  echo "✗ 推送失败，请先完成 GitHub 认证，二选一："
+  echo "  方式A（HTTPS PAT）: 在 GitHub 生成 Personal Access Token，然后执行"
+  echo "    git config --global credential.helper store"
+  echo "    git push -u origin ${BRANCH}   # 用户名填 GitHub 账号，密码填 PAT"
+  echo "  方式B（SSH）: 生成 SSH 密钥并添加到 GitHub，然后执行"
+  echo "    git remote set-url origin git@github.com:${APP_NAME}/${APP_NAME}.git"
+  echo "    git push -u origin ${BRANCH}"
+  exit 1
+fi
