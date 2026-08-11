@@ -47,18 +47,20 @@ if ! git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
   exit 1
 fi
 
-# 4. 推送到 GitHub
+# 4. 推送到 GitHub（timeout 防止网络异常时脚本永久挂起）
 echo "推送 ${BRANCH} -> origin/${BRANCH} ..."
-if git push -u origin "${BRANCH}"; then
+if timeout 120 git push -u origin "${BRANCH}"; then
   echo "✓ 推送完成: https://github.com/${APP_NAME}/${APP_NAME}"
 else
   echo ""
-  echo "✗ 推送失败，请先完成 GitHub 认证，二选一："
-  echo "  方式A（HTTPS PAT）: 在 GitHub 生成 Personal Access Token，然后执行"
-  echo "    git config --global credential.helper store"
-  echo "    git push -u origin ${BRANCH}   # 用户名填 GitHub 账号，密码填 PAT"
-  echo "  方式B（SSH）: 生成 SSH 密钥并添加到 GitHub，然后执行"
-  echo "    git remote set-url origin git@github.com:${APP_NAME}/${APP_NAME}.git"
-  echo "    git push -u origin ${BRANCH}"
+  echo "✗ 推送失败，可能原因及处理："
+  echo "  1) 未完成 GitHub 认证（首次必做），二选一："
+  echo "     方式A（HTTPS PAT）: 在 GitHub 生成 Personal Access Token，然后执行"
+  echo "       git config --global credential.helper store"
+  echo "       git push -u origin ${BRANCH}   # 用户名填 GitHub 账号，密码填 PAT"
+  echo "     方式B（SSH）: 生成 SSH 密钥并添加到 GitHub，然后执行"
+  echo "       git remote set-url origin git@github.com:${APP_NAME}/${APP_NAME}.git"
+  echo "       git push -u origin ${BRANCH}"
+  echo "  2) 服务器访问 github.com 网络不稳定，稍后重试 bash scripts/push.sh"
   exit 1
 fi
