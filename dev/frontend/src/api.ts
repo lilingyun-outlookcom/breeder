@@ -1,6 +1,25 @@
 const BASE = import.meta.env.BASE_URL || '/'; // '/dev/' 或 '/prod/'
 export const API_BASE = BASE.replace(/\/$/, '') + '/api';
 
+// dev/prod 同域不同路径：localStorage 按 origin 共享，登录态必须按环境加前缀隔离，
+// 否则 prod 登录会覆盖 dev 的登录态（反之亦然）
+const ENV_PREFIX = BASE.replace(/[/-]/g, '') || 'app'; // dev | prod
+export const TOKEN_KEY = `token_${ENV_PREFIX}`;
+export const USER_KEY = `user_${ENV_PREFIX}`;
+
+/** 读取带环境前缀的存储值；兼容旧版无前缀 key（单环境时期），读取后自动迁移并清理 */
+export function readScoped(key: string): string | null {
+  const scoped = localStorage.getItem(`${key}_${ENV_PREFIX}`);
+  if (scoped !== null) return scoped;
+  const legacy = localStorage.getItem(key);
+  if (legacy !== null) {
+    localStorage.setItem(`${key}_${ENV_PREFIX}`, legacy);
+    localStorage.removeItem(key);
+    return legacy;
+  }
+  return null;
+}
+
 /** 把后端返回的相对 URL（如 /uploads/xxx.jpg）转成带环境前缀的完整路径 */
 export function assetUrl(u: string | null | undefined): string {
   if (!u) return '';
@@ -16,17 +35,20 @@ export class ApiError extends Error {
   }
 }
 
-let token = localStorage.getItem('token') || '';
+let token = readScoped('token') || '';
 
 export function setToken(t: string) {
   token = t;
-  localStorage.setItem('token', t);
+  localStorage.setItem(TOKEN_KEY, t);
 }
 export function getToken() {
   return token;
 }
 export function clearToken() {
   token = '';
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  // 清理历史遗留的无前缀 key
   localStorage.removeItem('token');
   localStorage.removeItem('user');
 }

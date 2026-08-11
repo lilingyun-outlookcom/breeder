@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import { setToken as saveToken, clearToken as dropToken } from './api';
+import { setToken as saveToken, clearToken as dropToken, readScoped, USER_KEY } from './api';
 
 interface User {
   id: number;
@@ -11,14 +11,14 @@ interface User {
 
 function loadUser(): User | null {
   try {
-    return JSON.parse(localStorage.getItem('user') || 'null');
+    return JSON.parse(readScoped('user') || 'null');
   } catch {
     return null;
   }
 }
 
 export const auth = reactive({
-  token: localStorage.getItem('token') || '',
+  token: readScoped('token') || '',
   user: loadUser() as User | null,
   get isLogin() {
     return !!this.token;
@@ -30,11 +30,11 @@ export const auth = reactive({
     this.token = token;
     this.user = user;
     saveToken(token);
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
   },
   setUser(user: User) {
     this.user = user;
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
   },
   logout() {
     this.token = '';
