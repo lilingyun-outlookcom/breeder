@@ -23,7 +23,11 @@
             <td>
               <div class="ops">
                 <a @click="openEdit(u)">编辑</a>
-                <a v-if="u.id !== auth.user?.id" style="color: var(--danger)" @click="disable(u)">停用</a>
+                <a
+                  v-if="u.id !== auth.user?.id"
+                  :style="{ color: u.status ? 'var(--danger)' : 'var(--primary)' }"
+                  @click="toggleStatus(u)"
+                >{{ u.status ? '停用' : '启用' }}</a>
               </div>
             </td>
           </tr>
@@ -114,14 +118,27 @@ async function save() {
   }
 }
 
-async function disable(u: any) {
-  if (!confirm(`确认停用用户「${u.name}」？`)) return;
-  try {
-    await api.del(`/users/${u.id}`);
-    toast('已停用');
-    load();
-  } catch (e) {
-    errToast(e);
+async function toggleStatus(u: any) {
+  if (u.status) {
+    // 停用
+    if (!confirm(`确认停用用户「${u.name}」？`)) return;
+    try {
+      await api.del(`/users/${u.id}`);
+      toast('已停用');
+      load();
+    } catch (e) {
+      errToast(e);
+    }
+  } else {
+    // 启用
+    if (!confirm(`确认启用用户「${u.name}」？`)) return;
+    try {
+      await api.put(`/users/${u.id}`, { status: 1 });
+      toast('已启用');
+      load();
+    } catch (e) {
+      errToast(e);
+    }
   }
 }
 
