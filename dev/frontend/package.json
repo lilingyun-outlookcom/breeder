@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:dev": "VITE_BASE_PATH=/dev/ vite build",
-    "build:prod": "VITE_BASE_PATH=/prod/ VITE_OUTDIR=dist-prod vite build",
+    "build:dev": "VITE_BASE_PATH=/dev/ VITE_APP_TITLE=\"动物园饲养管理平台 - 开发环境\" vite build",
+    "build:prod": "VITE_BASE_PATH=/prod/ VITE_OUTDIR=dist-prod VITE_APP_TITLE=\"动物园饲养管理平台\" vite build",
     "build": "vite build"
   },
   "dependencies": {
