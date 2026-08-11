@@ -87,6 +87,7 @@
     <Modal :show="!!detail" :title="'繁育记录：' + (detail?.female_name || '')" size="lg" @close="detail = null">
       <template v-if="detail">
         <div class="card-title" style="margin-top: 0">📝 跟进/分娩记录</div>
+        <p class="muted mb8">💡 提交「分娩登记」后，将按存活数自动新增到该动物总数量，并自动完成繁育计划。</p>
         <div v-for="r in detailRecords" :key="r.id" class="list-item" style="cursor: default">
           <div class="row">
             <div>

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS feeds (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL UNIQUE,
   unit VARCHAR(20) DEFAULT '克',
+  stock DECIMAL(12,2) NOT NULL DEFAULT 0,
   remark VARCHAR(255) DEFAULT '',
   created_at DATETIME
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS medicines (
   category ENUM('用药','消毒') NOT NULL DEFAULT '用药',
   spec VARCHAR(100) DEFAULT '',
   unit VARCHAR(20) DEFAULT '',
+  stock DECIMAL(12,2) NOT NULL DEFAULT 0,
   remark VARCHAR(255) DEFAULT '',
   created_at DATETIME
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -55,6 +57,7 @@ CREATE TABLE IF NOT EXISTS animals (
   sex ENUM('公','母','未知') DEFAULT '未知',
   age VARCHAR(50) DEFAULT '',
   health ENUM('正常','异常') DEFAULT '正常',
+  total INT NOT NULL DEFAULT 1,
   keeper_id INT NULL,
   photo VARCHAR(255) DEFAULT '',
   remark VARCHAR(255) DEFAULT '',
@@ -170,6 +173,7 @@ CREATE TABLE IF NOT EXISTS medication_records (
   task_id INT NULL,
   animal_id INT NULL,
   medicine_id INT NULL,
+  quantity DECIMAL(10,2) NULL,
   dosage VARCHAR(100) DEFAULT '',
   photos TEXT,
   note VARCHAR(500) DEFAULT '',
@@ -200,6 +204,7 @@ CREATE TABLE IF NOT EXISTS treatment_plans (
   animal_id INT NOT NULL,
   report_id INT NULL,
   medicine_id INT NULL,
+  quantity INT NOT NULL DEFAULT 1,
   dosage VARCHAR(100) DEFAULT '',
   frequency VARCHAR(50) DEFAULT '',
   times VARCHAR(255) DEFAULT '[]',
@@ -298,4 +303,17 @@ CREATE TABLE IF NOT EXISTS uploads (
   mime VARCHAR(100) DEFAULT '',
   uploader_id INT NULL,
   created_at DATETIME
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 饲料/药品出入库流水（买入/灭失）
+CREATE TABLE IF NOT EXISTS inventory_records (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_type ENUM('feed','medicine') NOT NULL,
+  item_id INT NOT NULL,
+  change_type ENUM('buy','loss') NOT NULL,
+  quantity DECIMAL(12,2) NOT NULL,
+  remark VARCHAR(255) DEFAULT '',
+  created_by INT NULL,
+  created_at DATETIME,
+  KEY idx_item (item_type, item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

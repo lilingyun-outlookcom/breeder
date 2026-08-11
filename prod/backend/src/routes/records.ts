@@ -55,8 +55,8 @@ const TYPES: Record<string, TypeDef> = {
     table: 'medication_records',
     label: '用药记录',
     taskType: 'medication',
-    required: ['animal_id', 'medicine_id'],
-    fields: ['task_id', 'animal_id', 'medicine_id', 'dosage', 'photos', 'note'],
+    required: ['animal_id', 'medicine_id', 'quantity'],
+    fields: ['task_id', 'animal_id', 'medicine_id', 'quantity', 'dosage', 'photos', 'note'],
     listJoin: `LEFT JOIN animals a ON a.id=r.animal_id LEFT JOIN medicines m ON m.id=r.medicine_id
                LEFT JOIN users u ON u.id=r.created_by`,
   },
@@ -68,6 +68,17 @@ const TYPES: Record<string, TypeDef> = {
     fields: ['task_id', 'plan_id', 'animal_id', 'record_type', 'mother_intake', 'body_abnormal', 'total_born', 'alive_count', 'photos', 'note'],
     listJoin: `LEFT JOIN animals a ON a.id=r.animal_id LEFT JOIN users u ON u.id=r.created_by`,
   },
+};
+
+// JOIN 关联字段别名：mysql2 按列名映射对象，重复的 name 列会被后者覆盖，
+// 必须显式别名，否则前端 cage_name/animal_name/feed_name 等取不到（历史 BUG）。
+const ALIASES: Record<string, string> = {
+  feeding: `, c.name AS cage_name, a.name AS animal_name, f.name AS feed_name, u.name AS user_name`,
+  water: `, c.name AS cage_name, u.name AS user_name`,
+  environment: `, c.name AS cage_name, u.name AS user_name`,
+  disinfection: `, c.name AS cage_name, m.name AS medicine_name, u.name AS user_name`,
+  medication: `, a.name AS animal_name, m.name AS medicine_name, u.name AS user_name`,
+  breeding: `, a.name AS animal_name, u.name AS user_name`,
 };
 
 /* ============ 提交记录（饲养员/后台） ============ */
@@ -106,6 +117,26 @@ router.post(
       }
     }
 
+    // 喂食/用药前校验库存充足（插入成功后扣减）
+    if (td.taskType === 'feeding') {
+      const feedId = int(b.feed_id);
+      const qty = parseNum(b.quantity);
+      if (feedId && qty !== null && qty > 0) {
+        const feed = await qOne<any>('SELECT id, stock FROM feeds WHERE id=?', [feedId]);
+        if (!feed) return fail(res, '饲料不存在');
+        if (feed.stock < qty) return fail(res, '饲料库存不足（当前 ' + feed.stock + '）');
+      }
+    }
+    if (td.taskType === 'medication') {
+      const medId = int(b.medicine_id);
+      const qty = parseNum(b.quantity);
+      if (!medId) return fail(res, '请选择药品');
+      if (qty === null || qty <= 0) return fail(res, '请填写本次用药数量');
+      const med = await qOne<any>('SELECT id, stock FROM medicines WHERE id=?', [medId]);
+      if (!med) return fail(res, '药品不存在');
+      if (med.stock < qty) return fail(res, '药品库存不足（当前 ' + med.stock + '）');
+    }
+
     // 组装插入字段
     const cols: string[] = ['created_by', 'created_at'];
     const vals: any[] = [req.user!.id, nowStr()];
@@ -133,6 +164,53 @@ router.post(
       `INSERT INTO ${td.table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
       vals
     );
+
+    // 扣减库存：喂食扣饲料、用药扣药品
+    if (td.taskType === 'feeding') {
+      const feedId = int(b.feed_id);
+      const qty = parseNum(b.quantity);
+      if (feedId && qty !== null && qty > 0) {
+        await execute('UPDATE feeds SET stock=stock-? WHERE id=?', [qty, feedId]);
+      }
+    }
+    if (td.taskType === 'medication') {
+      const medId = int(b.medicine_id);
+      const qty = parseNum(b.quantity);
+      if (medId && qty !== null && qty > 0) {
+        await execute('UPDATE medicines SET stock=stock-? WHERE id=?', [qty, medId]);
+      }
+    }
+
+    // 繁育分娩登记：总数量 + 存活数、计划自动完成、剩余跟进任务完成
+    if (td.taskType === 'breeding' && b.record_type === '分娩登记') {
+      const planId = int(b.plan_id);
+      if (planId) {
+        const plan = await qOne<any>('SELECT * FROM breeding_plans WHERE id=?', [planId]);
+        if (plan && plan.status === 'active') {
+          const alive = parseNum(b.alive_count) || 0;
+          if (alive > 0) {
+            await execute('UPDATE animals SET total=total+? WHERE id=?', [alive, plan.female_animal_id]);
+          }
+          await execute("UPDATE breeding_plans SET status='done' WHERE id=?", [planId]);
+          // 计划下剩余未完成的跟进任务一并完成
+          const pending = await q("SELECT id FROM tasks WHERE plan_id=? AND status<>'done'", [planId]);
+          for (const t of pending) {
+            await execute("UPDATE tasks SET status='done', done_at=?, done_by=? WHERE id=?", [
+              nowStr(),
+              req.user!.id,
+              t.id,
+            ]);
+          }
+          const groups = await q('SELECT DISTINCT group_id FROM tasks WHERE plan_id=? AND group_id IS NOT NULL', [planId]);
+          for (const g of groups) {
+            await execute(
+              `UPDATE task_groups g SET done_count=(SELECT COUNT(*) FROM tasks t WHERE t.group_id=g.id AND t.status='done') WHERE g.id=?`,
+              [g.group_id]
+            );
+          }
+        }
+      }
+    }
 
     // 关联任务自动置为已完成
     if (taskId) {
@@ -198,7 +276,7 @@ router.get(
     }
     const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const rows = await q(
-      `SELECT r.* FROM ${td.table} r ${td.listJoin || ''} ${w}
+      `SELECT r.*${ALIASES[req.params.type] || ''} FROM ${td.table} r ${td.listJoin || ''} ${w}
        ORDER BY r.id DESC LIMIT 500`,
       params
     );

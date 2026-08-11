@@ -42,7 +42,7 @@ router.get(
       [uid]
     );
     const [animalCount] = await q<{ c: number }>(
-      'SELECT COUNT(*) c FROM animals WHERE keeper_id=? AND status=1',
+      'SELECT COALESCE(SUM(total),0) c FROM animals WHERE keeper_id=? AND status=1',
       [uid]
     );
     const [openReports] = await q<{ c: number }>(

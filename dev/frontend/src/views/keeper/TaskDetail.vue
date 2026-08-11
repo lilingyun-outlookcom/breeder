@@ -159,6 +159,10 @@
             <label>用量</label>
             <input v-model="form.dosage" placeholder="如：2片/次" />
           </div>
+          <div class="form-item">
+            <label class="required">本次用药数量</label>
+            <input v-model="form.quantity" type="number" min="0.01" step="0.01" placeholder="本次消耗数量（扣库存）" />
+          </div>
         </template>
 
         <!-- 繁育 -->
@@ -361,6 +365,7 @@ async function submit() {
   }
   if (t.value.task_type === 'disinfection' && !form.medicine_id) return toast('请选择消毒药品', 'err');
   if (t.value.task_type === 'medication' && !form.medicine_id) return toast('请选择药品', 'err');
+  if (t.value.task_type === 'medication' && !form.quantity) return toast('请填写本次用药数量', 'err');
   if (t.value.task_type === 'breeding' && form.record_type === '分娩登记') {
     if (!form.total_born || !form.alive_count) return toast('请填写产仔数和存活数', 'err');
   }

@@ -9,7 +9,7 @@
     <div class="table-wrap">
       <table class="tbl">
         <thead>
-          <tr><th>ID</th><th>名称</th><th>类别</th><th>规格</th><th>单位</th><th>备注</th><th>操作</th></tr>
+          <tr><th>ID</th><th>名称</th><th>类别</th><th>规格</th><th>单位</th><th>总数</th><th>备注</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="m in filtered" :key="m.id">
@@ -20,9 +20,12 @@
             </td>
             <td>{{ m.spec }}</td>
             <td>{{ m.unit }}</td>
+            <td><b>{{ m.stock ?? 0 }}</b></td>
             <td>{{ m.remark }}</td>
             <td>
               <div class="ops">
+                <a @click="openStock(m, 'buy')">买入</a>
+                <a @click="openStock(m, 'loss')">灭失</a>
                 <a @click="openEdit(m)">编辑</a>
                 <a style="color: var(--danger)" @click="remove(m)">删除</a>
               </div>
@@ -65,6 +68,25 @@
         <button class="btn btn-ghost" @click="show = false">取消</button>
       </div>
     </Modal>
+
+    <!-- 买入/灭失 -->
+    <Modal :show="showStock" :title="stockType === 'buy' ? '买入入库' : '灭失出库'" @close="showStock = false">
+      <p class="muted mb8">{{ stockItem?.name }}（当前总数 {{ stockItem?.stock ?? 0 }}）</p>
+      <div class="form-row">
+        <div class="form-item">
+          <label class="required">数量</label>
+          <input v-model="stockForm.quantity" type="number" min="0.01" step="0.01" />
+        </div>
+        <div class="form-item">
+          <label>备注</label>
+          <input v-model="stockForm.remark" placeholder="选填" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" @click="saveStock">{{ stockType === 'buy' ? '确认买入' : '确认灭失' }}</button>
+        <button class="btn btn-ghost" @click="showStock = false">取消</button>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -79,6 +101,10 @@ const q = ref('');
 const show = ref(false);
 const editing = ref<any>(null);
 const form = reactive({ name: '', category: '用药', spec: '', unit: '', remark: '' });
+const showStock = ref(false);
+const stockType = ref<'buy' | 'loss'>('buy');
+const stockItem = ref<any>(null);
+const stockForm = reactive({ quantity: 1, remark: '' });
 
 const filtered = computed(() =>
   q.value.trim() ? list.value.filter((m) => m.name.includes(q.value.trim())) : list.value
@@ -112,6 +138,31 @@ async function remove(m: any) {
   try {
     await api.del(`/medicines/${m.id}`);
     toast('已删除');
+    load();
+  } catch (e) {
+    errToast(e);
+  }
+}
+
+function openStock(m: any, t: 'buy' | 'loss') {
+  stockItem.value = m;
+  stockType.value = t;
+  Object.assign(stockForm, { quantity: 1, remark: '' });
+  showStock.value = true;
+}
+async function saveStock() {
+  const quantity = Number(stockForm.quantity);
+  if (!quantity || quantity <= 0) return toast('请填写数量', 'err');
+  try {
+    await api.post('/inventory', {
+      item_type: 'medicine',
+      item_id: stockItem.value.id,
+      change_type: stockType.value,
+      quantity,
+      remark: stockForm.remark,
+    });
+    toast(stockType.value === 'buy' ? '已入库' : '已灭失');
+    showStock.value = false;
     load();
   } catch (e) {
     errToast(e);

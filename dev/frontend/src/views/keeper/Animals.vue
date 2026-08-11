@@ -13,7 +13,7 @@
             <div>
               <div class="title">{{ a.name }}</div>
               <div class="sub">{{ a.species }} · {{ a.sex }} · {{ a.age }}</div>
-              <div class="sub">笼舍：{{ a.cage_name || '未分配' }}</div>
+              <div class="sub">笼舍：{{ a.cage_name || '未分配' }} · 总数量：{{ a.total }}</div>
             </div>
           </div>
           <span class="badge" :class="a.health === '正常' ? 'badge-ok' : 'badge-danger'">{{ a.health }}</span>

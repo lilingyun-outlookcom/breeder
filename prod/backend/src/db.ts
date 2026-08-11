@@ -15,6 +15,17 @@ export const pool: mysql.Pool = mysql.createPool({
   dateStrings: true, // DATETIME/DATE 直接返回字符串，避免时区转换
 });
 
+/** 幂等迁移：确保表中存在指定列（兼容线上老库，CREATE TABLE IF NOT EXISTS 不会改老表） */
+async function ensureColumn(table: string, column: string, ddl: string): Promise<void> {
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS c FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?',
+    [table, column]
+  );
+  if ((rows as any)[0].c === 0) {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+
 /** 读取 schema.sql 并按语句拆分执行（仅执行 CREATE TABLE IF NOT EXISTS，可重复运行） */
 export async function initSchema(): Promise<void> {
   const file = path.join(__dirname, 'schema.sql');
@@ -34,6 +45,18 @@ export async function initSchema(): Promise<void> {
     }
   } finally {
     conn.release();
+  }
+
+  // 老表增量迁移（列名/DDL 均为代码内常量，无注入风险）
+  const migrations: [string, string, string][] = [
+    ['animals', 'total', 'total INT NOT NULL DEFAULT 1'],
+    ['feeds', 'stock', 'stock DECIMAL(12,2) NOT NULL DEFAULT 0'],
+    ['medicines', 'stock', 'stock DECIMAL(12,2) NOT NULL DEFAULT 0'],
+    ['treatment_plans', 'quantity', 'quantity INT NOT NULL DEFAULT 1'],
+    ['medication_records', 'quantity', 'quantity DECIMAL(10,2) NULL'],
+  ];
+  for (const [table, column, ddl] of migrations) {
+    await ensureColumn(table, column, ddl);
   }
 }
 

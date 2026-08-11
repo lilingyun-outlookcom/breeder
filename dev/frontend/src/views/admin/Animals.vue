@@ -9,11 +9,12 @@
         <input v-model="q" placeholder="搜索名称/物种" style="width: 180px" />
       </div>
       <button class="btn" @click="openEdit()">+ 新增动物</button>
+      <button class="btn btn-ghost" @click="merge">合并同类</button>
     </div>
     <div class="table-wrap">
       <table class="tbl">
         <thead>
-          <tr><th>ID</th><th>动物</th><th>物种</th><th>性别</th><th>年龄</th><th>笼舍</th><th>饲养员</th><th>健康</th><th>操作</th></tr>
+          <tr><th>ID</th><th>动物</th><th>物种</th><th>性别</th><th>年龄</th><th>笼舍</th><th>饲养员</th><th>健康</th><th>总数量</th><th>待产数</th><th>生病数</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="a in filtered" :key="a.id">
@@ -30,6 +31,9 @@
             <td>{{ a.cage_name || '-' }}</td>
             <td>{{ a.keeper_name || '未分配' }}</td>
             <td><span class="badge" :class="a.health === '正常' ? 'badge-ok' : 'badge-danger'">{{ a.health }}</span></td>
+            <td><b>{{ a.total }}</b></td>
+            <td>{{ a.pregnant_count }}</td>
+            <td><span v-if="a.sick_count" style="color: var(--danger)">{{ a.sick_count }}</span><span v-else>0</span></td>
             <td>
               <div class="ops">
                 <a @click="openEdit(a)">编辑</a>
@@ -68,6 +72,10 @@
           <select v-model="form.health">
             <option>正常</option><option>异常</option>
           </select>
+        </div>
+        <div class="form-item">
+          <label>总数量</label>
+          <input v-model="form.total" type="number" min="1" placeholder="按类型管理填群体数量，个体填 1" />
         </div>
       </div>
       <div class="form-row">
@@ -117,7 +125,7 @@ const fKeeper = ref('');
 const show = ref(false);
 const editing = ref<any>(null);
 const form = reactive({
-  name: '', species: '', sex: '未知', age: '', health: '正常',
+  name: '', species: '', sex: '未知', age: '', health: '正常', total: 1,
   cage_id: '', keeper_id: '', photoList: [] as string[], remark: '',
 });
 
@@ -141,7 +149,7 @@ function openEdit(a?: any) {
   editing.value = a || null;
   Object.assign(form, {
     name: a?.name || '', species: a?.species || '', sex: a?.sex || '未知',
-    age: a?.age || '', health: a?.health || '正常',
+    age: a?.age || '', health: a?.health || '正常', total: a?.total || 1,
     cage_id: a?.cage_id || '', keeper_id: a?.keeper_id || '',
     photoList: a?.photo ? [a.photo] : [], remark: a?.remark || '',
   });
@@ -149,12 +157,24 @@ function openEdit(a?: any) {
 }
 async function save() {
   if (!form.name) return toast('请填写名称', 'err');
+  const total = Number(form.total);
+  if (!total || total < 1) return toast('总数量必须大于 0', 'err');
   try {
-    const body = { ...form, photo: form.photoList[0] || '' };
+    const body = { ...form, total, photo: form.photoList[0] || '' };
     if (editing.value) await api.put(`/animals/${editing.value.id}`, body);
     else await api.post('/animals', body);
     toast('保存成功');
     show.value = false;
+    load();
+  } catch (e) {
+    errToast(e);
+  }
+}
+async function merge() {
+  if (!confirm('将「同物种 + 同笼舍 + 同饲养员」的动物合并为一行（数量求和，关联记录自动保留）。确认执行？')) return;
+  try {
+    const r = await api.post('/animals/merge');
+    toast(r.merged ? `已合并 ${r.merged} 类` : '没有可合并的动物');
     load();
   } catch (e) {
     errToast(e);

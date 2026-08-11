@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { q, qOne, execute } from '../db';
 import { requireAuth, requireRole, hashPwd } from '../auth';
 import { ok, fail, ah, int } from './helpers';
-import { nowStr, todayStr } from '../util';
+import { nowStr, todayStr, parseNum } from '../util';
 
 const router = Router();
 router.use(requireAuth);
@@ -268,7 +268,11 @@ router.delete(
 
 /* ============ 动物 ============ */
 const ANIMAL_SELECT = `
-  SELECT a.*, c.name AS cage_name, u.name AS keeper_name
+  SELECT a.*, c.name AS cage_name, u.name AS keeper_name,
+         (SELECT COALESCE(SUM(tp.quantity),0) FROM treatment_plans tp
+            WHERE tp.animal_id=a.id AND tp.status='active') AS sick_count,
+         (SELECT COUNT(*) FROM breeding_plans bp
+            WHERE bp.female_animal_id=a.id AND bp.status='active' AND bp.plan_type='妊娠') AS pregnant_count
   FROM animals a
   LEFT JOIN cages c ON c.id = a.cage_id
   LEFT JOIN users u ON u.id = a.keeper_id
@@ -300,8 +304,10 @@ router.post(
   ah(async (req, res) => {
     const { name, species, sex, age, health, cage_id, keeper_id, photo, remark } = req.body || {};
     if (!name) return fail(res, '请填写动物名称');
+    const total = int(req.body?.total) || 1;
+    if (total < 1) return fail(res, '总数量必须大于 0');
     const r = await execute(
-      'INSERT INTO animals (cage_id,name,species,sex,age,health,keeper_id,photo,remark,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?)',
+      'INSERT INTO animals (cage_id,name,species,sex,age,health,total,keeper_id,photo,remark,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,?)',
       [
         cage_id || null,
         name,
@@ -309,6 +315,7 @@ router.post(
         sex || '未知',
         age || '',
         health || '正常',
+        total,
         keeper_id || null,
         photo || '',
         remark || '',
@@ -331,13 +338,57 @@ router.put(
     ['name', 'species', 'sex', 'age', 'health', 'photo', 'remark'].forEach((k) => {
       if (b[k] !== undefined) a[k] = b[k];
     });
+    if (b.total !== undefined) {
+      const t = int(b.total) || a.total;
+      if (t < 1) return fail(res, '总数量必须大于 0');
+      a.total = t;
+    }
     if (b.cage_id !== undefined) a.cage_id = b.cage_id || null;
     if (b.keeper_id !== undefined) a.keeper_id = b.keeper_id || null;
     await execute(
-      'UPDATE animals SET cage_id=?,name=?,species=?,sex=?,age=?,health=?,keeper_id=?,photo=?,remark=? WHERE id=?',
-      [a.cage_id, a.name, a.species, a.sex, a.age, a.health, a.keeper_id, a.photo, a.remark, id]
+      'UPDATE animals SET cage_id=?,name=?,species=?,sex=?,age=?,health=?,total=?,keeper_id=?,photo=?,remark=? WHERE id=?',
+      [a.cage_id, a.name, a.species, a.sex, a.age, a.health, a.total, a.keeper_id, a.photo, a.remark, id]
     );
     ok(res, '更新成功');
+  })
+);
+
+/* 合并同类：同物种+同笼舍+同饲养员的多行合并为一行（数量求和、引用重映射、其余下架） */
+router.post(
+  '/animals/merge',
+  requireRole('admin'),
+  ah(async (_req, res) => {
+    const groups = await q<{ species: string; cage_id: number | null; keeper_id: number | null; keep_id: number; cnt: number }>(
+      `SELECT species, cage_id, keeper_id, MIN(id) AS keep_id, COUNT(*) AS cnt
+       FROM animals WHERE status=1 AND species<>''
+       GROUP BY species, cage_id, keeper_id HAVING cnt > 1`
+    );
+    let merged = 0;
+    for (const g of groups) {
+      const others = await q<{ id: number }>(
+        'SELECT id FROM animals WHERE status=1 AND species=? AND cage_id<=>? AND keeper_id<=>? AND id<>?',
+        [g.species, g.cage_id, g.keeper_id, g.keep_id]
+      );
+      const ids = others.map((r) => r.id);
+      if (!ids.length) continue;
+      const inClause = ids.map(() => '?').join(',');
+      // 数量求和（保留行 + 被合并行）
+      await execute(
+        `UPDATE animals SET total=(SELECT s FROM (SELECT SUM(total) AS s FROM animals WHERE id IN (${inClause}) OR id=?) AS t) WHERE id=?`,
+        [...ids, g.keep_id, g.keep_id]
+      );
+      // 引用重映射到保留行
+      await execute(`UPDATE tasks SET animal_id=? WHERE animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE feeding_records SET animal_id=? WHERE animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE treatment_plans SET animal_id=? WHERE animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE breeding_plans SET female_animal_id=? WHERE female_animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE breeding_plans SET male_animal_id=? WHERE male_animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE abnormal_reports SET animal_id=? WHERE animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE cub_records SET animal_id=? WHERE animal_id IN (${inClause})`, [g.keep_id, ...ids]);
+      await execute(`UPDATE animals SET status=0 WHERE id IN (${inClause})`, ids);
+      merged += 1;
+    }
+    ok(res, { merged });
   })
 );
 
@@ -349,6 +400,66 @@ router.delete(
     if (!id) return fail(res, '参数错误');
     await execute('UPDATE animals SET status=0 WHERE id=?', [id]);
     ok(res, '删除成功');
+  })
+);
+
+/* ============ 物资出入库（饲料/药品 买入/灭失） ============ */
+router.post(
+  '/inventory',
+  requireRole('admin', 'vet'),
+  ah(async (req, res) => {
+    const b = req.body || {};
+    const itemType = b.item_type;
+    if (!['feed', 'medicine'].includes(itemType)) return fail(res, '物资类型不正确');
+    const changeType = b.change_type;
+    if (!['buy', 'loss'].includes(changeType)) return fail(res, '变动类型不正确');
+    const itemId = int(b.item_id);
+    const qty = parseNum(b.quantity);
+    if (!itemId) return fail(res, '参数错误');
+    if (qty === null || qty <= 0) return fail(res, '数量必须大于 0');
+    const table = itemType === 'feed' ? 'feeds' : 'medicines';
+    const item = await qOne<any>(`SELECT id, stock FROM ${table} WHERE id=?`, [itemId]);
+    if (!item) return fail(res, '物资不存在');
+    if (changeType === 'loss' && item.stock < qty) {
+      return fail(res, `库存不足（当前 ${item.stock}），无法灭失`);
+    }
+    await execute(`UPDATE ${table} SET stock=${changeType === 'buy' ? 'stock+?' : 'stock-?'} WHERE id=?`, [qty, itemId]);
+    await execute(
+      'INSERT INTO inventory_records (item_type,item_id,change_type,quantity,remark,created_by,created_at) VALUES (?,?,?,?,?,?,?)',
+      [itemType, itemId, changeType, qty, b.remark || '', req.user!.id, nowStr()]
+    );
+    ok(res, '操作成功');
+  })
+);
+
+router.get(
+  '/inventory-records',
+  ah(async (req, res) => {
+    const itemType = String(req.query.item_type || '');
+    const date = String(req.query.date || '');
+    const where: string[] = [];
+    const params: any[] = [];
+    if (['feed', 'medicine'].includes(itemType)) {
+      where.push('ir.item_type=?');
+      params.push(itemType);
+    }
+    if (date) {
+      where.push('DATE(ir.created_at)=?');
+      params.push(date);
+    }
+    const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const rows = await q(
+      `SELECT ir.*,
+              CASE WHEN ir.item_type='feed' THEN f.name ELSE m.name END AS item_name,
+              u.name AS user_name
+       FROM inventory_records ir
+       LEFT JOIN feeds f ON f.id=ir.item_id AND ir.item_type='feed'
+       LEFT JOIN medicines m ON m.id=ir.item_id AND ir.item_type='medicine'
+       LEFT JOIN users u ON u.id=ir.created_by
+       ${w} ORDER BY ir.id DESC LIMIT 500`,
+      params
+    );
+    ok(res, rows);
   })
 );
 
@@ -406,7 +517,9 @@ router.get(
     const [pendingTickets] = await q<{ c: number }>(
       "SELECT COUNT(*) c FROM abnormal_reports WHERE status='pending'"
     );
-    const [animalCount] = await q<{ c: number }>('SELECT COUNT(*) c FROM animals WHERE status=1');
+    const [animalCount] = await q<{ c: number }>(
+      'SELECT COALESCE(SUM(total),0) c FROM animals WHERE status=1'
+    );
     const taskStat: Record<string, number> = { pending: 0, processing: 0, done: 0 };
     tasks.forEach((t) => (taskStat[t.status] = t.c));
     ok(res, {

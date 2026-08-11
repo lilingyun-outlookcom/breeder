@@ -99,6 +99,10 @@
           <label>用量</label>
           <input v-model="plan.dosage" placeholder="如：2片/次" />
         </div>
+        <div class="form-item">
+          <label>诊疗数量</label>
+          <input v-model="plan.quantity" type="number" min="1" placeholder="群体填只数，个体填 1" />
+        </div>
       </div>
       <div class="form-row">
         <div class="form-item">
@@ -153,7 +157,7 @@ const showPlan = ref(false);
 
 const detailForm = reactive({ status: 'pending', resolution: '', health: '正常' });
 const plan = reactive({
-  medicine_id: '', dosage: '', start_date: today(), duration_days: 3,
+  medicine_id: '', dosage: '', quantity: 1, start_date: today(), duration_days: 3,
   times: ['09:00'] as string[], remark: '', report_id: 0, animal_id: 0,
 });
 
@@ -190,7 +194,7 @@ function openPlan() {
   Object.assign(plan, {
     report_id: current.value.id,
     animal_id: current.value.animal_id,
-    medicine_id: '', dosage: '', start_date: today(), duration_days: 3,
+    medicine_id: '', dosage: '', quantity: 1, start_date: today(), duration_days: 3,
     times: ['09:00'], remark: '',
   });
   showPlan.value = true;
@@ -198,8 +202,10 @@ function openPlan() {
 
 async function savePlan() {
   if (!plan.medicine_id) return toast('请选择药品', 'err');
+  const qty = Number(plan.quantity);
+  if (!qty || qty < 1) return toast('诊疗数量必须大于 0', 'err');
   try {
-    await api.post('/treatment-plans', plan);
+    await api.post('/treatment-plans', { ...plan, quantity: qty });
     toast('方案已保存，已生成每日用药任务');
     showPlan.value = false;
     if (current.value) await open(current.value);

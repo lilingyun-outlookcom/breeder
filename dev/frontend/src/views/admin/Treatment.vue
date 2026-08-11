@@ -13,13 +13,14 @@
     <div class="table-wrap">
       <table class="tbl">
         <thead>
-          <tr><th>ID</th><th>动物</th><th>药品</th><th>用量</th><th>频次</th><th>周期</th><th>兽医</th><th>状态</th><th>操作</th></tr>
+          <tr><th>ID</th><th>动物</th><th>药品</th><th>数量</th><th>用量</th><th>频次</th><th>周期</th><th>兽医</th><th>状态</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="p in list" :key="p.id">
             <td>{{ p.id }}</td>
             <td>{{ p.animal_name }}</td>
             <td>{{ p.medicine_name }}</td>
+            <td>{{ p.quantity }}</td>
             <td>{{ p.dosage }}</td>
             <td>{{ p.frequency }}</td>
             <td class="muted">{{ p.start_date }} ~ {{ p.end_date }}</td>
@@ -27,6 +28,7 @@
             <td><StatusBadge :v="p.status === 'active' ? 'active' : 'done'" /></td>
             <td>
               <div class="ops">
+                <a style="color: var(--danger)" v-if="p.status === 'active'" @click="openDeath(p)">确认死亡</a>
                 <a @click="finish(p)">{{ p.status === 'active' ? '结束' : '恢复' }}</a>
                 <a @click="openPlan(p)">编辑</a>
               </div>
@@ -56,6 +58,10 @@
         <div class="form-item">
           <label>用量</label>
           <input v-model="form.dosage" placeholder="如：2片/次" />
+        </div>
+        <div class="form-item">
+          <label>诊疗数量</label>
+          <input v-model="form.quantity" type="number" min="1" placeholder="群体填只数，个体填 1" />
         </div>
       </div>
       <div class="form-row">
@@ -94,6 +100,19 @@
         <button class="btn btn-ghost" @click="show = false">取消</button>
       </div>
     </Modal>
+
+    <!-- 确认死亡 -->
+    <Modal :show="showDeath" title="确认死亡" @close="showDeath = false">
+      <div class="form-item">
+        <label class="required">死亡只数</label>
+        <input v-model="deathForm.died_count" type="number" min="1" :max="deathPlan?.quantity" />
+        <p class="muted mt8">将按死亡只数扣减该动物总数量，并同步减少诊疗计划剩余数量（剩余减至 0 自动结束）。</p>
+      </div>
+      <div class="form-actions">
+        <button class="btn" style="background: var(--danger)" @click="confirmDeath">确认死亡</button>
+        <button class="btn btn-ghost" @click="showDeath = false">取消</button>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -111,9 +130,12 @@ const keepers = ref<any[]>([]);
 const show = ref(false);
 const editing = ref<any>(null);
 const f = reactive({ status: '' });
+const showDeath = ref(false);
+const deathPlan = ref<any>(null);
+const deathForm = reactive({ died_count: 1 });
 
 const form = reactive({
-  animal_id: '', medicine_id: '', dosage: '', start_date: today(),
+  animal_id: '', medicine_id: '', dosage: '', quantity: 1, start_date: today(),
   duration_days: 3, times: ['09:00'] as string[], remark: '', assignee_id: '',
 });
 
@@ -130,7 +152,7 @@ function openPlan(p?: any) {
   editing.value = p || null;
   Object.assign(form, {
     animal_id: p?.animal_id || '', medicine_id: p?.medicine_id || '',
-    dosage: p?.dosage || '', start_date: p?.start_date || today(),
+    dosage: p?.dosage || '', quantity: p?.quantity || 1, start_date: p?.start_date || today(),
     duration_days: p?.duration_days || 3, times: p?.times?.length ? p.times : ['09:00'],
     remark: p?.remark || '', assignee_id: '',
   });
@@ -139,15 +161,38 @@ function openPlan(p?: any) {
 
 async function save() {
   if (!form.animal_id || !form.medicine_id) return toast('请选择动物和药品', 'err');
+  const qty = Number(form.quantity);
+  if (!qty || qty < 1) return toast('诊疗数量必须大于 0', 'err');
   try {
     if (editing.value) {
-      await api.put(`/treatment-plans/${editing.value.id}`, { remark: form.remark, dosage: form.dosage });
+      await api.put(`/treatment-plans/${editing.value.id}`, { remark: form.remark, dosage: form.dosage, quantity: qty });
       toast('已更新');
     } else {
-      await api.post('/treatment-plans', form);
+      await api.post('/treatment-plans', { ...form, quantity: qty });
       toast('方案已保存，已生成每日用药任务');
     }
     show.value = false;
+    load();
+  } catch (e) {
+    errToast(e);
+  }
+}
+
+function openDeath(p: any) {
+  deathPlan.value = p;
+  deathForm.died_count = p.quantity;
+  showDeath.value = true;
+}
+
+async function confirmDeath() {
+  const died = Number(deathForm.died_count);
+  if (!died || died < 1) return toast('请填写死亡只数', 'err');
+  if (died > deathPlan.value.quantity) return toast(`不能超过剩余诊疗数量（${deathPlan.value.quantity}）`, 'err');
+  if (!confirm(`确认该动物死亡 ${died} 只？将扣减总数量并结束相应诊疗。`)) return;
+  try {
+    await api.post(`/treatment-plans/${deathPlan.value.id}/death`, { died_count: died });
+    toast('已确认死亡');
+    showDeath.value = false;
     load();
   } catch (e) {
     errToast(e);

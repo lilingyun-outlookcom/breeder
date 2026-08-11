@@ -135,17 +135,22 @@ router.post(
     const end = b.end_date || addDays(start, duration - 1);
 
     const animal = await qOne<any>('SELECT * FROM animals WHERE id=?', [animalId]);
+    if (!animal) return fail(res, '动物不存在');
+    const qty = int(b.quantity) || 1;
+    if (qty < 1) return fail(res, '诊疗数量必须大于 0');
+    if (qty > (animal.total || 1)) return fail(res, `诊疗数量不能超过该动物总数量（${animal.total}）`);
     const assigneeId = int(b.assignee_id) || animal?.keeper_id;
     if (!assigneeId) return fail(res, '该动物未分配饲养员，请先分配');
 
     const times: string[] = Array.isArray(b.times) ? b.times : ['09:00'];
     const plan = await execute(
-      `INSERT INTO treatment_plans (animal_id,report_id,medicine_id,dosage,frequency,times,duration_days,start_date,end_date,vet_id,status,remark,created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO treatment_plans (animal_id,report_id,medicine_id,quantity,dosage,frequency,times,duration_days,start_date,end_date,vet_id,status,remark,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         animalId,
         int(b.report_id),
         medicineId,
+        qty,
         b.dosage || '',
         b.frequency || `${times.length}次/天`,
         JSON.stringify(times),
@@ -213,13 +218,56 @@ router.put(
     if (b.status && ['active', 'done'].includes(b.status)) p.status = b.status;
     if (b.remark !== undefined) p.remark = b.remark;
     if (b.dosage !== undefined) p.dosage = b.dosage;
-    await execute('UPDATE treatment_plans SET status=?,remark=?,dosage=? WHERE id=?', [
+    if (b.quantity !== undefined) {
+      const qty = int(b.quantity) || p.quantity;
+      if (qty < 1) return fail(res, '诊疗数量必须大于 0');
+      const animal = await qOne<any>('SELECT total FROM animals WHERE id=?', [p.animal_id]);
+      if (qty > (animal?.total || 1)) return fail(res, `诊疗数量不能超过该动物总数量（${animal?.total}）`);
+      p.quantity = qty;
+    }
+    await execute('UPDATE treatment_plans SET status=?,remark=?,dosage=?,quantity=? WHERE id=?', [
       p.status,
       p.remark,
       p.dosage,
+      p.quantity,
       id,
     ]);
     ok(res, '更新成功');
+  })
+);
+
+/* 确认死亡：按只数扣减动物总数量与诊疗计划剩余数量 */
+router.post(
+  '/treatment-plans/:id/death',
+  requireRole('admin', 'vet'),
+  ah(async (req, res) => {
+    const id = int(req.params.id);
+    if (!id) return fail(res, '参数错误');
+    const p = await qOne<any>('SELECT * FROM treatment_plans WHERE id=?', [id]);
+    if (!p) return fail(res, '方案不存在');
+    if (p.status !== 'active') return fail(res, '该方案已结束');
+    const died = int(req.body?.died_count);
+    if (!died || died < 1) return fail(res, '请填写死亡只数');
+    if (died > p.quantity) return fail(res, `死亡只数不能超过剩余诊疗数量（${p.quantity}）`);
+    const animal = await qOne<any>('SELECT id, total, status FROM animals WHERE id=?', [p.animal_id]);
+    if (!animal) return fail(res, '动物不存在');
+    // 扣减动物总数量，减至 0 自动下架
+    const newTotal = Math.max((animal.total || 1) - died, 0);
+    await execute('UPDATE animals SET total=?, status=? WHERE id=?', [
+      newTotal,
+      newTotal <= 0 ? 0 : animal.status,
+      animal.id,
+    ]);
+    // 扣减计划剩余数量，减至 0 自动结束
+    const newQty = p.quantity - died;
+    const remark = `${p.remark || ''} 确认死亡 ${died} 只`.trim();
+    await execute('UPDATE treatment_plans SET quantity=?, status=?, remark=? WHERE id=?', [
+      Math.max(newQty, 0),
+      newQty <= 0 ? 'done' : 'active',
+      remark,
+      id,
+    ]);
+    ok(res, '已确认死亡');
   })
 );
 

@@ -26,6 +26,9 @@
             <td>{{ r.id }}</td>
             <td v-for="col in columns" :key="col.key">
               <span v-if="col.key === 'photos'"></span>
+              <span v-else-if="col.key === 'change_type'">
+                <span class="badge" :class="r.change_type === 'buy' ? 'badge-ok' : 'badge-danger'">{{ r.change_type === 'buy' ? '买入' : '灭失' }}</span>
+              </span>
               <StatusBadge v-else-if="col.badge" :v="r[col.key]" />
               <template v-else>{{ r[col.key] || '-' }}</template>
             </td>
@@ -110,6 +113,22 @@ const TYPES: Record<string, { label: string; cols: { key: string; label: string;
       { key: 'body_abnormal', label: '身体异常' },
     ],
   },
+  inventory_feed: {
+    label: '饲料出入库',
+    cols: [
+      { key: 'item_name', label: '名称' },
+      { key: 'change_type', label: '类型' },
+      { key: 'quantity', label: '数量' },
+    ],
+  },
+  inventory_medicine: {
+    label: '药品出入库',
+    cols: [
+      { key: 'item_name', label: '名称' },
+      { key: 'change_type', label: '类型' },
+      { key: 'quantity', label: '数量' },
+    ],
+  },
 };
 
 const type = ref('feeding');
@@ -121,7 +140,13 @@ const columns = computed(() => TYPES[type.value].cols);
 
 async function load() {
   try {
-    list.value = await api.get('/records/' + type.value + api.qs(f));
+    if (type.value === 'inventory_feed' || type.value === 'inventory_medicine') {
+      list.value = await api.get(
+        '/inventory-records' + api.qs({ item_type: type.value === 'inventory_feed' ? 'feed' : 'medicine', date: f.date })
+      );
+    } else {
+      list.value = await api.get('/records/' + type.value + api.qs(f));
+    }
   } catch (e) {
     errToast(e);
   }
