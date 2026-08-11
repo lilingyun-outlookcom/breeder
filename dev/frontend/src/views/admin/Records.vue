@@ -129,3 +129,12 @@ async function load() {
 
 onMounted(load);
 </script>
+
+<style scoped>
+/* 记录类型按钮：保持自然宽度不被挤压，容器可换行，避免按钮文字堆叠 */
+.seg button {
+  flex: 0 1 auto;
+  padding: 7px 14px;
+  white-space: nowrap;
+}
+</style>
