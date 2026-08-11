@@ -6,6 +6,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/login' },
     { path: '/login', component: () => import('./views/Login.vue') },
+    { path: '/help', component: () => import('./views/Help.vue'), meta: { title: '操作手册', public: true } },
     {
       path: '/admin',
       component: () => import('./views/admin/AdminLayout.vue'),
@@ -52,7 +53,7 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  if (to.path === '/login') return true;
+  if (to.path === '/login' || to.path === '/help') return true;
   if (!auth.isLogin) return { path: '/login' };
   const roles = to.meta.roles as string[] | undefined;
   if (roles && !roles.includes(auth.user?.role || '')) {

@@ -36,6 +36,7 @@
         <div class="user-box">
           <span>👤 <b>{{ auth.user?.name }}</b>（{{ roleName(auth.user?.role) }}）</span>
           <RouterLink to="/admin/notifications">🔔 消息</RouterLink>
+          <HelpButton />
           <a @click="logout">退出</a>
         </div>
       </div>
@@ -48,6 +49,7 @@
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { auth, roleName } from '../../store';
+import HelpButton from '../../components/HelpButton.vue';
 
 const route = useRoute();
 const router = useRouter();

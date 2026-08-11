@@ -42,3 +42,20 @@
 - PROD 环境：`https://breeder.sflswall.com.cn/prod/`（后端 127.0.0.1:3001，服务 breeder-prod）
 - 前端构建：Vite（base 由 `VITE_BASE_PATH` 注入，dev=/dev/，prod=/prod/，经 Apache 反代剥离前缀）
 - 后端：Express + MySQL，运行编译产物 `dist/index.js`
+
+## 运维脚本
+
+- **重启应用**：`bash scripts/restart.sh [dev|prod|all]`（默认 all）。
+  sudo 密码从 `/opt/breeder/.env` 的 `BREEDER_SUDO_PASSWORD` 读取，无需交互输入，可放入 cron 调用。
+- **prod 自动备份**：`bash scripts/backup-prod.sh`，由用户 crontab（breeder）每天 12:00 / 18:00 各执行一次。
+  - 备份内容：prod 数据库（mysqldump 压缩）+ 上传文件（`uploads/prod`），输出到 `/opt/breeder/backups/prod`（不入库）。
+  - 保留策略：自动清理 7 天前的备份；备份日志 `tail -f /opt/breeder/logs/backup.log`。
+  - 数据库账号从 `prod/backend/.env` 读取，脚本无需 sudo。
+- **prod 一键恢复**：`bash scripts/restore-prod.sh`，交互式选择备份（数据库/上传文件/全部）后恢复，
+  完成后自动重启 prod 服务。⚠️ 会用所选备份覆盖 prod 当前数据，执行前需确认。
+
+## 帮助系统（前端）
+
+- 所有页面顶栏/悬浮按钮提供「帮助」入口：首页/登录页点击在新标签页打开完整手册（`#/help`），
+  其他页面在本页弹窗展示当前页操作手册。
+- 手册内容统一维护在 `dev/frontend/src/help/content.ts`，新增/修改页面后需同步补充对应章节。

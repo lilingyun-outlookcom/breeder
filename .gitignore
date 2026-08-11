@@ -19,6 +19,9 @@ logs/
 # uploads
 uploads/
 
+# 备份目录（自动备份产物，不入库）
+backups/
+
 # legacy placeholder servers (superseded by real app)
 dev/server/
 prod/server/

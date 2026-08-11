@@ -25,6 +25,9 @@
         饲养员与后台管理员使用各自账号登录，系统自动进入对应端<br />
         首次使用默认账号：admin/admin123 · keeper/keeper123
       </p>
+      <div style="text-align: center; margin-top: 14px">
+        <HelpButton label="❓ 使用帮助" />
+      </div>
     </div>
   </div>
 </template>
@@ -35,6 +38,7 @@ import { useRouter } from 'vue-router';
 import { api } from '../api';
 import { auth } from '../store';
 import { toast, errToast } from '../toast';
+import HelpButton from '../components/HelpButton.vue';
 
 const router = useRouter();
 const form = reactive({ username: '', password: '' });

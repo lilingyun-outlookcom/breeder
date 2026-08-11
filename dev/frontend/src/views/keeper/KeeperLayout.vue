@@ -1,6 +1,7 @@
 <template>
   <div class="mobile-shell">
     <RouterView />
+    <HelpButton variant="float" />
     <nav class="mobile-tabbar">
       <RouterLink to="/keeper/home">
         <span class="ic">🏠</span>首页
@@ -25,6 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { api } from '../../api';
+import HelpButton from '../../components/HelpButton.vue';
 
 const unread = ref(0);
 let timer: any = null;
