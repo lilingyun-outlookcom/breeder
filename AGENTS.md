@@ -32,7 +32,9 @@
 - 每次代码修改完成后**自动** `git add` + `git commit`，无需再向用户确认。
 - commit message 使用中文，简述本次修改内容（多个相关改动可放在同一次提交）。
 - 提交前检查工作区，只提交本次任务相关的文件，避免夹带无关改动。
-- 不执行 `git push`、`git reset`、`git rebase` 等其他 git 变更操作，除非用户明确要求。
+- commit 完成后**自动**执行 `bash scripts/push.sh` 推送到 GitHub
+  （仓库：`https://github.com/lilingyun-outlookcom/breeder`；首次需完成 GitHub 认证，见 `scripts/push.sh` 注释）。
+- 不执行 `git push --force`、`git reset`、`git rebase` 等其他破坏性 git 变更操作，除非用户明确要求。
 
 ## 环境信息
 
