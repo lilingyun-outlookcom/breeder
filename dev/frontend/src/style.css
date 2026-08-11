@@ -561,6 +561,7 @@ table.tbl {
 
 /* ---------- 移动卡片列表 ---------- */
 .list-item {
+  display: block;
   background: #fff;
   border-radius: var(--radius);
   box-shadow: var(--shadow);

@@ -47,7 +47,7 @@
             <label class="required">动物</label>
             <select v-model="f.animal_id">
               <option value="">选择动物</option>
-              <option v-for="a in animals" :key="a.id" :value="a.id">{{ a.name }}（{{ a.species }}）</option>
+              <option v-for="a in cageAnimals" :key="a.id" :value="a.id">{{ a.name }}（{{ a.species }}）</option>
             </select>
           </div>
           <div class="form-item" v-if="f.task_type === 'feeding'">
@@ -255,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { api } from '../../api';
 import { toast, errToast } from '../../toast';
 import Modal from '../../components/Modal.vue';
@@ -285,6 +285,19 @@ const f = reactive({
 const groups = ref<any[]>([]);
 const groupTasks = ref<any[]>([]);
 const viewGroupId = ref(0);
+
+// 动物下拉联动笼舍：选了笼舍后只显示该笼舍下的动物
+const cageAnimals = computed(() =>
+  f.cage_id ? animals.value.filter((a: any) => String(a.cage_id) === String(f.cage_id)) : animals.value
+);
+watch(
+  () => f.cage_id,
+  () => {
+    if (f.animal_id && !cageAnimals.value.some((a: any) => String(a.id) === String(f.animal_id))) {
+      f.animal_id = '';
+    }
+  }
+);
 
 const tasks = ref<any[]>([]);
 const listFilter = reactive({ date: '', type: '', status: '', assignee_id: '' });

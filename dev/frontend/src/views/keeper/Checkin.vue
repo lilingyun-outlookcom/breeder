@@ -41,9 +41,11 @@
             <span v-else class="badge badge-ok" style="margin-left: 8px">范围内</span>
           </p>
         </template>
-        <p v-else class="muted">正在获取定位…请确保已允许浏览器定位权限（需 HTTPS 环境）</p>
+        <p v-else-if="locating" class="muted">正在获取定位…请确保已允许浏览器定位权限（需 HTTPS 环境）</p>
+        <p v-else-if="locError" class="muted" style="color: var(--danger)">{{ locError }}</p>
+        <p v-else class="muted">未获取定位，点击下方“刷新定位”重试</p>
         <div class="form-actions mt8">
-          <button class="btn btn-ghost" @click="locate">刷新定位</button>
+          <button class="btn btn-ghost" :disabled="locating" @click="locate">刷新定位</button>
         </div>
       </div>
 
@@ -74,6 +76,8 @@ const settings = ref<any>({});
 const att = ref<any>(null);
 const pos = ref<any>(null);
 const dist = ref(0);
+const locating = ref(false);
+const locError = ref('');
 
 const inRange = computed(() => pos.value && dist.value <= (Number(settings.value.checkin_radius) || 500));
 const attText = computed(() => {
@@ -85,20 +89,47 @@ const attText = computed(() => {
 
 function locate() {
   if (!navigator.geolocation) {
+    locError.value = '当前浏览器不支持定位';
     toast('当前浏览器不支持定位', 'err');
     return;
   }
-  navigator.geolocation.getCurrentPosition(
-    (p) => {
-      pos.value = p;
-      calcDist(p);
-    },
-    (e) => {
-      console.warn('定位失败', e);
-      toast('定位失败：' + (e.message || '请检查权限'), 'err');
-    },
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
+  locating.value = true;
+  locError.value = '';
+  // 先宽松模式快速取位（可命中缓存），失败/超时再用高精度重试
+  navigator.geolocation.getCurrentPosition(onPos, retryHighAccuracy, {
+    enableHighAccuracy: false,
+    timeout: 8000,
+    maximumAge: 300000,
+  });
+}
+
+function retryHighAccuracy(err: any) {
+  // 权限被拒时重试无意义，直接报错；其余情况（超时/位置暂不可用）用高精度再试一次
+  if (err?.code === 1) return onErr(err);
+  navigator.geolocation.getCurrentPosition(onPos, onErr, {
+    enableHighAccuracy: true,
+    timeout: 20000,
+    maximumAge: 60000,
+  });
+}
+
+function onPos(p: any) {
+  locating.value = false;
+  locError.value = '';
+  pos.value = p;
+  calcDist(p);
+}
+
+function onErr(e: any) {
+  locating.value = false;
+  const msg =
+    e?.code === 1
+      ? '定位权限被拒绝，请在浏览器设置中允许定位后重试'
+      : e?.code === 3
+        ? '定位超时，请检查网络/GPS 信号后点击“刷新定位”重试'
+        : e?.message || '请检查权限';
+  locError.value = msg;
+  toast('定位失败：' + msg, 'err');
 }
 
 function calcDist(p: any) {

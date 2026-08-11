@@ -2,8 +2,8 @@
   <div>
     <div class="filters mb8">
       <div class="seg" style="max-width: 560px; flex-wrap: wrap">
-        <button v-for="(label, key) in TYPES" :key="key" :class="{ active: type === key }" @click="type = key; load()">
-          {{ label }}
+        <button v-for="(item, key) in TYPES" :key="key" :class="{ active: type === key }" @click="type = key; load()">
+          {{ item.label }}
         </button>
       </div>
       <input v-model="f.date" type="date" @change="load" />
