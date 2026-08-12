@@ -53,7 +53,7 @@ import StatusBadge from '../../components/StatusBadge.vue';
 const router = useRouter();
 const tasks = ref<any[]>([]);
 const date = ref(today());
-const type = ref('');
+const type = ref((router.currentRoute.value.query.type as string) || '');
 const loading = ref(true);
 
 const TYPE_LABEL: Record<string, string> = {

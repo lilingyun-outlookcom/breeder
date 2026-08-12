@@ -24,15 +24,15 @@
 
       <!-- 统计 -->
       <div class="flex" style="gap: 8px; margin-bottom: 12px">
-        <div class="card" style="flex: 1; text-align: center; padding: 10px">
+        <div class="card clickable" style="flex: 1; text-align: center; padding: 10px" @click="router.push('/keeper/tasks')">
           <div style="font-size: 20px; font-weight: 700">{{ data.tasks?.length ?? 0 }}</div>
           <div class="muted">今日待办</div>
         </div>
-        <div class="card" style="flex: 1; text-align: center; padding: 10px">
+        <div class="card clickable" style="flex: 1; text-align: center; padding: 10px" @click="router.push('/keeper/tasks?type=medication')">
           <div style="font-size: 20px; font-weight: 700; color: var(--primary)">{{ data.medTasks?.length ?? 0 }}</div>
           <div class="muted">今日喂药</div>
         </div>
-        <div class="card" style="flex: 1; text-align: center; padding: 10px">
+        <div class="card clickable" style="flex: 1; text-align: center; padding: 10px" @click="router.push('/keeper/animals')">
           <div style="font-size: 20px; font-weight: 700">{{ data.animalCount ?? 0 }}</div>
           <div class="muted">负责动物</div>
         </div>

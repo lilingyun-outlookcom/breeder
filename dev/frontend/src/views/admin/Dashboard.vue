@@ -1,32 +1,32 @@
 <template>
   <div>
     <div class="stat-grid">
-      <div class="stat-card">
+      <div class="stat-card clickable" @click="router.push('/admin/attendance')">
         <div class="num">{{ s.keeperCount ?? '-' }}</div>
         <div class="label">在岗饲养员</div>
         <div class="icon">👥</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card clickable" @click="router.push('/admin/attendance')">
         <div class="num">{{ s.checkedToday ?? '-' }}<span style="font-size: 14px; color: var(--text-3)"> / {{ s.keeperCount ?? 0 }}</span></div>
         <div class="label">今日已签到（迟到 {{ s.lateToday ?? 0 }}）</div>
         <div class="icon">🕐</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card clickable" @click="router.push('/admin/tasks')">
         <div class="num">{{ s.tasksToday?.done ?? 0 }}<span style="font-size: 14px; color: var(--text-3)"> / {{ totalTasks }}</span></div>
         <div class="label">今日任务完成率</div>
         <div class="icon">📋</div>
       </div>
-      <div class="stat-card" style="border-left: 3px solid var(--danger)">
+      <div class="stat-card clickable" style="border-left: 3px solid var(--danger)" @click="router.push('/admin/tasks')">
         <div class="num" style="color: var(--danger)">{{ s.overdueToday ?? 0 }}</div>
         <div class="label">今日逾期任务</div>
         <div class="icon">⏰</div>
       </div>
-      <div class="stat-card" style="border-left: 3px solid var(--warning)">
+      <div class="stat-card clickable" style="border-left: 3px solid var(--warning)" @click="router.push('/admin/reports')">
         <div class="num" style="color: var(--warning)">{{ s.pendingTickets ?? 0 }}</div>
         <div class="label">待处理异常工单</div>
         <div class="icon">🚨</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card clickable" @click="router.push('/admin/animals')">
         <div class="num">{{ s.animalCount ?? '-' }}</div>
         <div class="label">在册动物</div>
         <div class="icon">🐾</div>
@@ -76,9 +76,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { api } from '../../api';
 import { errToast } from '../../toast';
 import StatusBadge from '../../components/StatusBadge.vue';
+
+const router = useRouter();
 
 const s = ref<any>({ tasksToday: {} });
 const tickets = ref<any[]>([]);
