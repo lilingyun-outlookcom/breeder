@@ -313,6 +313,7 @@ CREATE TABLE IF NOT EXISTS inventory_records (
   change_type ENUM('buy','loss') NOT NULL,
   quantity DECIMAL(12,2) NOT NULL,
   remark VARCHAR(255) DEFAULT '',
+  attachments VARCHAR(1000) DEFAULT '',
   created_by INT NULL,
   created_at DATETIME,
   KEY idx_item (item_type, item_id)

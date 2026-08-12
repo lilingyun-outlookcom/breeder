@@ -423,10 +423,18 @@ router.post(
     if (changeType === 'loss' && item.stock < qty) {
       return fail(res, `库存不足（当前 ${item.stock}），无法灭失`);
     }
+    // 附件：仅接受 /uploads/ 开头的 URL 数组，最多 9 个
+    let attachments = '';
+    if (Array.isArray(b.attachments)) {
+      const urls = b.attachments
+        .filter((u: any) => typeof u === 'string' && /^\/uploads\/.+/.test(u))
+        .slice(0, 9);
+      attachments = JSON.stringify(urls);
+    }
     await execute(`UPDATE ${table} SET stock=${changeType === 'buy' ? 'stock+?' : 'stock-?'} WHERE id=?`, [qty, itemId]);
     await execute(
-      'INSERT INTO inventory_records (item_type,item_id,change_type,quantity,remark,created_by,created_at) VALUES (?,?,?,?,?,?,?)',
-      [itemType, itemId, changeType, qty, b.remark || '', req.user!.id, nowStr()]
+      'INSERT INTO inventory_records (item_type,item_id,change_type,quantity,remark,attachments,created_by,created_at) VALUES (?,?,?,?,?,?,?,?)',
+      [itemType, itemId, changeType, qty, b.remark || '', attachments, req.user!.id, nowStr()]
     );
     ok(res, '操作成功');
   })
@@ -459,6 +467,13 @@ router.get(
        ${w} ORDER BY ir.id DESC LIMIT 500`,
       params
     );
+    for (const r of rows) {
+      try {
+        r.attachments = r.attachments ? JSON.parse(r.attachments) : [];
+      } catch {
+        r.attachments = [];
+      }
+    }
     ok(res, rows);
   })
 );

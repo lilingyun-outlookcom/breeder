@@ -65,6 +65,10 @@
           <input v-model="stockForm.remark" placeholder="选填" />
         </div>
       </div>
+      <div class="form-item">
+        <label>照片/附件</label>
+        <PhotoUpload v-model="stockForm.attachments" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z" />
+      </div>
       <div class="form-actions">
         <button class="btn" @click="saveStock">{{ stockType === 'buy' ? '确认买入' : '确认灭失' }}</button>
         <button class="btn btn-ghost" @click="showStock = false">取消</button>
@@ -78,6 +82,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../../api';
 import { toast, errToast } from '../../toast';
 import Modal from '../../components/Modal.vue';
+import PhotoUpload from '../../components/PhotoUpload.vue';
 
 const list = ref<any[]>([]);
 const q = ref('');
@@ -87,7 +92,7 @@ const form = reactive({ name: '', unit: '克', remark: '' });
 const showStock = ref(false);
 const stockType = ref<'buy' | 'loss'>('buy');
 const stockItem = ref<any>(null);
-const stockForm = reactive({ quantity: 1, remark: '' });
+const stockForm = reactive({ quantity: 1, remark: '', attachments: [] as string[] });
 
 const filtered = computed(() =>
   q.value.trim() ? list.value.filter((f) => f.name.includes(q.value.trim())) : list.value
@@ -127,7 +132,7 @@ async function remove(f: any) {
 function openStock(f: any, t: 'buy' | 'loss') {
   stockItem.value = f;
   stockType.value = t;
-  Object.assign(stockForm, { quantity: 1, remark: '' });
+  Object.assign(stockForm, { quantity: 1, remark: '', attachments: [] });
   showStock.value = true;
 }
 async function saveStock() {
@@ -140,6 +145,7 @@ async function saveStock() {
       change_type: stockType.value,
       quantity,
       remark: stockForm.remark,
+      attachments: stockForm.attachments,
     });
     toast(stockType.value === 'buy' ? '已入库' : '已灭失');
     showStock.value = false;

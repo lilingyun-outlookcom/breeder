@@ -54,6 +54,7 @@ export async function initSchema(): Promise<void> {
     ['medicines', 'stock', 'stock DECIMAL(12,2) NOT NULL DEFAULT 0'],
     ['treatment_plans', 'quantity', 'quantity INT NOT NULL DEFAULT 1'],
     ['medication_records', 'quantity', 'quantity DECIMAL(10,2) NULL'],
+    ['inventory_records', 'attachments', 'attachments VARCHAR(1000) NOT NULL DEFAULT ""'],
   ];
   for (const [table, column, ddl] of migrations) {
     await ensureColumn(table, column, ddl);

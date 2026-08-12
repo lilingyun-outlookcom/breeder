@@ -11,7 +11,21 @@ import { nowStr } from '../util';
 
 const router = Router();
 
-const ALLOWED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_MIME = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain', 'text/csv',
+  'application/zip', 'application/x-zip-compressed',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+];
+const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', '7z'];
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -30,11 +44,12 @@ const upload = multer({
   storage,
   limits: { fileSize: config.maxUploadMb * 1024 * 1024, files: 9 },
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED.includes(file.mimetype)) {
-      cb(new Error('仅支持 jpg/png/gif/webp 图片'));
+    const ext = path.extname(file.originalname).toLowerCase().slice(1);
+    if (ALLOWED_MIME.includes(file.mimetype) || ALLOWED_EXT.includes(ext)) {
+      cb(null, true);
       return;
     }
-    cb(null, true);
+    cb(new Error('不支持的附件类型，仅支持图片、文档与压缩包'));
   },
 });
 

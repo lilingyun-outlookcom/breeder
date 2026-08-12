@@ -15,7 +15,7 @@
           <tr>
             <th>ID</th>
             <th v-for="col in columns" :key="col.key">{{ col.label }}</th>
-            <th>照片</th>
+            <th>照片/附件</th>
             <th>备注</th>
             <th>记录人</th>
             <th>时间</th>
@@ -33,9 +33,13 @@
               <template v-else>{{ r[col.key] || '-' }}</template>
             </td>
             <td>
-              <div class="flex" style="gap: 4px">
+              <div class="flex" style="gap: 4px; flex-wrap: wrap">
                 <img v-for="p in r.photos" :key="p" :src="assetUrl(p)" class="ph-img" style="width: 32px; height: 32px" @click="preview = p" />
-                <span v-if="!r.photos?.length" class="muted">-</span>
+                <template v-for="a in r.attachments || []" :key="a">
+                  <img v-if="isImage(a)" :src="assetUrl(a)" class="ph-img" style="width: 32px; height: 32px" @click="preview = a" />
+                  <a v-else :href="assetUrl(a)" target="_blank" class="badge badge-info" :title="a.split('/').pop()">{{ fileExt(a) }}</a>
+                </template>
+                <span v-if="!r.photos?.length && !(r.attachments || []).length" class="muted">-</span>
               </div>
             </td>
             <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.note || '-' }}</td>
@@ -135,6 +139,15 @@ const type = ref('feeding');
 const list = ref<any[]>([]);
 const f = reactive({ date: '' });
 const preview = ref('');
+
+/** 图片类文件按缩略图展示，其余附件以类型徽章展示 */
+function isImage(u: string) {
+  return /\.(jpe?g|png|gif|webp|bmp)$/i.test(u);
+}
+function fileExt(u: string) {
+  const m = u.match(/\.([a-z0-9]+)(?:$|\?)/i);
+  return (m ? m[1].toUpperCase() : 'FILE');
+}
 
 const columns = computed(() => TYPES[type.value].cols);
 
