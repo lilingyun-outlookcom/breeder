@@ -1,6 +1,10 @@
 <template>
   <div class="map-picker">
     <div ref="mapEl" class="map-picker-map"></div>
+    <button class="locate-btn" :disabled="locating" @click="locate" title="定位到当前位置">
+      <span v-if="!locating">📍 定位到当前位置</span>
+      <span v-else>定位中…</span>
+    </button>
   </div>
 </template>
 
@@ -8,6 +12,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { toast } from '../toast';
 
 const props = withDefaults(
   defineProps<{ lat?: number | string; lng?: number | string; radius?: number | string }>(),
@@ -19,6 +24,7 @@ const emit = defineEmits<{
 }>();
 
 const mapEl = ref<HTMLDivElement | null>(null);
+const locating = ref(false);
 let map: L.Map | null = null;
 let marker: L.Marker | null = null;
 let circle: L.Circle | null = null;
@@ -99,6 +105,39 @@ function addTile(idx: number) {
   if (!map || !tiles[idx]) return;
   tiles[idx].addTo(map);
   tileIdx = idx;
+}
+
+/** 定位到当前位置：成功后移动标记并回填坐标 */
+function locate() {
+  if (!navigator.geolocation) {
+    toast('当前浏览器不支持定位', 'err');
+    return;
+  }
+  if (locating.value) return;
+  locating.value = true;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      locating.value = false;
+      const { latitude, longitude } = pos.coords;
+      setMarker(latitude, longitude);
+      const rv = num(props.radius);
+      if (rv !== null && rv > 0) drawCircle(rv);
+      map?.setView([latitude, longitude], 16);
+      emit('update:lat', round(latitude));
+      emit('update:lng', round(longitude));
+    },
+    (err) => {
+      locating.value = false;
+      const msg =
+        err.code === err.PERMISSION_DENIED
+          ? '已拒绝定位授权，请在浏览器设置中允许定位后重试'
+          : err.code === err.TIMEOUT
+            ? '定位超时，请重试'
+            : '无法获取当前位置，请检查定位是否开启';
+      toast(msg, 'err');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
 }
 
 onMounted(() => {
@@ -184,6 +223,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .map-picker {
+  position: relative;
   width: 100%;
 }
 .map-picker-map {
@@ -191,6 +231,29 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   overflow: hidden;
   z-index: 0;
+}
+.locate-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1001;
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #333;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+.locate-btn:hover:not(:disabled) {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+.locate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 /* Leaflet 动态插入的 DOM 不受 scoped 限制，需穿透 */
 .map-picker-map :deep(.map-picker-marker) {
