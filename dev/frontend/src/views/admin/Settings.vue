@@ -3,6 +3,14 @@
     <div class="card" style="max-width: 640px">
       <div class="card-title">📍 打卡范围设置</div>
       <p class="muted mb8">饲养员只能在设置的地址范围内签到/签退，超范围将无法打卡。</p>
+      <MapPicker
+        :lat="form.checkin_lat"
+        :lng="form.checkin_lng"
+        :radius="form.checkin_radius"
+        @update:lat="(v) => (form.checkin_lat = String(v))"
+        @update:lng="(v) => (form.checkin_lng = String(v))"
+        class="mb8"
+      />
       <div class="form-row">
         <div class="form-item">
           <label class="required">中心纬度</label>
@@ -28,7 +36,7 @@
         </div>
       </div>
       <p class="muted mt8">
-        💡 如何获取园区坐标：手机地图 App 中长按园区大门位置，复制显示的经纬度填入即可。
+        💡 在地图上点击或拖拽红色标记即可选点，经纬度会自动填入，也可手动微调。
       </p>
       <div class="form-actions mt16">
         <button class="btn" @click="save">保存设置</button>
@@ -55,6 +63,7 @@
 import { reactive, onMounted } from 'vue';
 import { api } from '../../api';
 import { toast, errToast } from '../../toast';
+import MapPicker from '../../components/MapPicker.vue';
 
 const form = reactive({
   checkin_lat: '', checkin_lng: '', checkin_radius: '',
