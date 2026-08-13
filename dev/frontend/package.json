@@ -1,0 +1,21 @@
+{
+  "name": "breeder-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build:dev": "VITE_BASE_PATH=/dev/ VITE_APP_TITLE=\"动物园饲养管理平台 - 开发环境\" vite build",
+    "build:prod": "VITE_BASE_PATH=/prod/ VITE_OUTDIR=dist-prod VITE_APP_TITLE=\"动物园饲养管理平台\" vite build",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "vue": "^3.5.41",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.1"
+  }
+}

@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+public/
+dist-prod/
+*.tsbuildinfo
+
+# env & secrets
+.env
+*.env
+!.env.example
+
+# logs
+*.log
+logs/
+
+# uploads
+uploads/
+
+# 备份目录（自动备份产物，不入库）
+backups/
+
+# legacy placeholder servers (superseded by real app)
+dev/server/
+prod/server/
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/
