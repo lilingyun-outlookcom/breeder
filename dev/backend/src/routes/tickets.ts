@@ -18,24 +18,38 @@ const REPORT_SELECT = `
   LEFT JOIN users h ON h.id=r.handler_id
 `;
 
-/* ============ 动物异常上报（饲养员/后台） ============ */
+/* ============ 动物异常/死亡上报（饲养员/后台） ============ */
 router.post(
   '/reports/abnormal',
   ah(async (req, res) => {
     const b = req.body || {};
     const animalId = int(b.animal_id);
     if (!animalId) return fail(res, '请选择动物');
-    if (!b.symptoms) return fail(res, '请描述异常症状');
+    const reportType = b.report_type === 'death' ? 'death' : 'abnormal';
+    if (!b.symptoms) return fail(res, reportType === 'death' ? '请描述死亡情况' : '请描述异常症状');
+    let diedCount = 0;
+    if (reportType === 'death') {
+      const n = int(b.died_count);
+      if (!n || n < 1) return fail(res, '请填写死亡只数');
+      diedCount = n;
+      const animal = await qOne<any>('SELECT total FROM animals WHERE id=?', [animalId]);
+      if (!animal) return fail(res, '动物不存在');
+      if (diedCount > (animal.total || 1)) {
+        return fail(res, `死亡只数不能超过该动物总数量（${animal.total}）`);
+      }
+    }
     const r = await execute(
-      `INSERT INTO abnormal_reports (animal_id,reporter_id,symptoms,photos,status,priority,created_at)
-       VALUES (?,?,?,?,?,?,?)`,
+      `INSERT INTO abnormal_reports (animal_id,reporter_id,symptoms,photos,status,priority,report_type,died_count,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
       [
         animalId,
         req.user!.id,
         b.symptoms,
         JSON.stringify(Array.isArray(b.photos) ? b.photos : []),
         'pending',
-        b.priority || '中',
+        reportType === 'death' ? '高' : b.priority || '中',
+        reportType,
+        diedCount,
         nowStr(),
       ]
     );
@@ -117,6 +131,41 @@ router.put(
       await execute('UPDATE animals SET health=? WHERE id=?', [b.health, r.animal_id]);
     }
     ok(res, '处理成功');
+  })
+);
+
+/* 确认死亡上报：按上报只数扣减动物总数量并完结工单（admin/vet，幂等） */
+router.post(
+  '/reports/:id/confirm-death',
+  requireRole('admin', 'vet'),
+  ah(async (req, res) => {
+    const id = int(req.params.id);
+    if (!id) return fail(res, '参数错误');
+    const r = await qOne<any>('SELECT * FROM abnormal_reports WHERE id=?', [id]);
+    if (!r) return fail(res, '工单不存在');
+    if (r.report_type !== 'death') return fail(res, '该工单不是死亡上报');
+    if (r.death_confirmed) return fail(res, '该工单已确认过死亡');
+    const animal = await qOne<any>('SELECT id, total, status FROM animals WHERE id=?', [r.animal_id]);
+    if (!animal) return fail(res, '动物不存在');
+    let died = r.died_count || 1;
+    if (req.body?.died_count !== undefined) {
+      died = int(req.body.died_count);
+      if (!died || died < 1) return fail(res, '请填写死亡只数');
+    }
+    if (died > (animal.total || 0)) return fail(res, `死亡只数不能超过当前总数量（${animal.total}）`);
+    // 扣减动物总数量，减至 0 自动下架
+    const newTotal = Math.max((animal.total || 1) - died, 0);
+    await execute('UPDATE animals SET total=?, status=? WHERE id=?', [
+      newTotal,
+      newTotal <= 0 ? 0 : animal.status,
+      animal.id,
+    ]);
+    const resolution = `${r.resolution ? r.resolution + ' ' : ''}确认死亡 ${died} 只，已扣减总数量`;
+    await execute(
+      "UPDATE abnormal_reports SET death_confirmed=1, status='done', resolution=?, handler_id=?, handled_at=? WHERE id=?",
+      [resolution, req.user!.id, nowStr(), id]
+    );
+    ok(res, '已确认死亡');
   })
 );
 

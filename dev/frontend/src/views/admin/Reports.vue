@@ -11,11 +11,15 @@
     <div class="table-wrap">
       <table class="tbl">
         <thead>
-          <tr><th>ID</th><th>动物</th><th>症状</th><th>优先级</th><th>上报人</th><th>时间</th><th>状态</th><th>操作</th></tr>
+          <tr><th>ID</th><th>类型</th><th>动物</th><th>症状</th><th>优先级</th><th>上报人</th><th>时间</th><th>状态</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="r in list" :key="r.id">
             <td>{{ r.id }}</td>
+            <td>
+              <span v-if="r.report_type === 'death'" class="badge badge-danger">死亡×{{ r.died_count }}</span>
+              <span v-else class="badge badge-dark">异常</span>
+            </td>
             <td>{{ r.animal_name }}<span class="muted">（{{ r.cage_name || '未分配笼舍' }}）</span></td>
             <td style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.symptoms }}</td>
             <td>
@@ -37,6 +41,10 @@
           <div style="flex: 1">
             <p><b>动物：</b>{{ current.animal_name }}（{{ current.cage_name || '未分配笼舍' }}）</p>
             <p class="mt8"><b>症状：</b>{{ current.symptoms }}</p>
+            <p class="mt8" v-if="current.report_type === 'death'">
+              <b>死亡只数：</b>{{ current.died_count }} 只
+              <span v-if="current.death_confirmed" class="badge badge-dark">已确认扣减</span>
+            </p>
             <p class="mt8"><b>上报人：</b>{{ current.reporter_name }} · {{ current.created_at }}</p>
             <p class="mt8"><b>处理方案：</b></p>
             <textarea v-model="detailForm.resolution" placeholder="填写处理结果/诊疗方案" style="min-height: 80px"></textarea>
@@ -67,6 +75,12 @@
         </div>
         <div class="form-actions">
           <button class="btn" @click="save">保存处理</button>
+          <button
+            v-if="current.report_type === 'death' && !current.death_confirmed"
+            class="btn"
+            style="background: var(--danger)"
+            @click="confirmDeath"
+          >确认死亡</button>
           <button class="btn btn-warn" @click="openPlan()">录入诊疗方案</button>
           <button class="btn btn-ghost" @click="current = null">关闭</button>
         </div>
@@ -182,6 +196,19 @@ async function save() {
   try {
     await api.put(`/reports/${current.value.id}`, detailForm);
     toast('已保存');
+    current.value = null;
+    load();
+  } catch (e) {
+    errToast(e);
+  }
+}
+
+async function confirmDeath() {
+  if (!current.value) return;
+  if (!confirm(`确认「${current.value.animal_name}」死亡 ${current.value.died_count} 只？将扣减动物总数量并完结工单。`)) return;
+  try {
+    await api.post(`/reports/${current.value.id}/confirm-death`, {});
+    toast('已确认死亡，已扣减总数量');
     current.value = null;
     load();
   } catch (e) {

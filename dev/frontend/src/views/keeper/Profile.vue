@@ -22,7 +22,7 @@
           🐾 我的动物（{{ animalCount }}）
         </RouterLink>
         <RouterLink to="/keeper/reports" class="list-item" style="box-shadow: none; margin-bottom: 0; border-bottom: 1px solid var(--border); border-radius: 0">
-          🚨 我的异常上报
+          🚨 我的上报记录
         </RouterLink>
         <RouterLink to="/keeper/breeding" class="list-item" style="box-shadow: none; margin-bottom: 0; border-radius: 0">
           🐣 我的繁育任务

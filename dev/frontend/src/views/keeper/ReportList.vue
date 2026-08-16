@@ -2,13 +2,16 @@
   <div>
     <div class="mobile-top">
       <RouterLink to="/keeper/profile" class="back">‹</RouterLink>
-      <span class="title">🚨 我的异常上报</span>
+      <span class="title">🚨 我的上报记录</span>
     </div>
     <div class="mobile-body">
       <div v-for="r in list" :key="r.id" class="list-item" style="cursor: default">
         <div class="row">
           <div>
-            <div class="title">{{ r.animal_name }} <span class="muted" style="font-weight: normal">#{{ r.id }}</span></div>
+            <div class="title">
+              {{ r.animal_name }} <span class="muted" style="font-weight: normal">#{{ r.id }}</span>
+              <span v-if="r.report_type === 'death'" class="badge badge-danger">死亡 {{ r.died_count }} 只</span>
+            </div>
             <div class="sub">{{ r.symptoms }}</div>
             <div class="sub">{{ r.created_at?.slice(0, 16) }}</div>
             <div class="sub" v-if="r.resolution" style="color: var(--primary-dark)">处理结果：{{ r.resolution }}</div>

@@ -92,7 +92,7 @@
         <div class="card-title">⚡ 快捷入口</div>
         <div class="flex" style="flex-wrap: wrap; gap: 10px">
           <RouterLink class="btn btn-outline" to="/keeper/animals">🐾 我的动物</RouterLink>
-          <RouterLink class="btn btn-outline" to="/keeper/report">🚨 异常上报</RouterLink>
+          <RouterLink class="btn btn-outline" to="/keeper/report">🚨 异常/死亡上报</RouterLink>
           <RouterLink class="btn btn-outline" to="/keeper/breeding">🐣 繁育任务</RouterLink>
           <RouterLink class="btn btn-outline" to="/keeper/attendance-history">🕐 我的打卡记录</RouterLink>
         </div>
