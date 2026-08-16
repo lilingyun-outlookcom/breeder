@@ -2,7 +2,7 @@
   <div class="admin-shell">
     <div v-if="menuOpen" class="admin-mask" @click="menuOpen = false"></div>
     <aside class="admin-side" :class="{ open: menuOpen }">
-      <div class="admin-logo">🦁 饲养<span>管理平台</span></div>
+      <div class="admin-logo"><img :src="logo" alt="logo" class="logo-img" /> 饲养<span>管理平台</span></div>
       <ul class="admin-nav">
         <li><RouterLink to="/admin/dashboard">📊 首页看板</RouterLink></li>
         <li v-if="isAdminRole">
@@ -56,6 +56,7 @@ const router = useRouter();
 const isAdminRole = auth.user?.role === 'admin';
 
 const menuOpen = ref(false);
+const logo = import.meta.env.BASE_URL + 'logo.jpg';
 // 路由切换后自动收起移动端菜单
 watch(() => route.path, () => (menuOpen.value = false));
 

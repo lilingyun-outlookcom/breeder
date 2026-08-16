@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="mobile-top">
-      <span class="title">🦁 饲养工作台</span>
+      <span class="title"><img :src="logo" alt="logo" class="logo-img" /> 饲养工作台</span>
       <span style="font-size: 12.5px">{{ auth.user?.name }}</span>
     </div>
 
@@ -110,6 +110,7 @@ import { errToast } from '../../toast';
 import StatusBadge from '../../components/StatusBadge.vue';
 
 const router = useRouter();
+const logo = import.meta.env.BASE_URL + 'logo.jpg';
 const data = ref<any>({ tasks: [] });
 const att = ref<any>(null);
 

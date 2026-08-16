@@ -1,7 +1,7 @@
 <template>
   <div class="login-page">
     <div class="login-box">
-      <h1>🦁 饲养管理平台</h1>
+      <h1><img :src="logo" alt="logo" class="logo-img" /> 饲养管理平台</h1>
       <p class="sub">动物园饲养 · 任务 · 打卡一体化系统</p>
       <form @submit.prevent="login">
         <div class="form-item">
@@ -41,6 +41,7 @@ import { toast, errToast } from '../toast';
 import HelpButton from '../components/HelpButton.vue';
 
 const router = useRouter();
+const logo = import.meta.env.BASE_URL + 'logo.jpg';
 const form = reactive({ username: '', password: '' });
 const loading = ref(false);
 
