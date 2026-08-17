@@ -34,9 +34,9 @@
             </td>
             <td>
               <div class="flex" style="gap: 4px; flex-wrap: wrap">
-                <img v-for="p in r.photos" :key="p" :src="assetUrl(p)" class="ph-img" style="width: 32px; height: 32px" @click="preview = p" />
+                <img v-for="p in r.photos" :key="p" :src="assetUrl(p)" loading="lazy" class="ph-img" style="width: 32px; height: 32px" @click="preview = p" />
                 <template v-for="a in r.attachments || []" :key="a">
-                  <img v-if="isImage(a)" :src="assetUrl(a)" class="ph-img" style="width: 32px; height: 32px" @click="preview = a" />
+                  <img v-if="isImage(a)" :src="assetUrl(a)" loading="lazy" class="ph-img" style="width: 32px; height: 32px" @click="preview = a" />
                   <a v-else :href="assetUrl(a)" target="_blank" class="badge badge-info" :title="a.split('/').pop()">{{ fileExt(a) }}</a>
                 </template>
                 <span v-if="!r.photos?.length && !(r.attachments || []).length" class="muted">-</span>
@@ -48,7 +48,8 @@
           </tr>
         </tbody>
       </table>
-      <div v-if="!list.length" class="empty">暂无记录</div>
+      <div v-if="loading" class="empty">加载中...</div>
+      <div v-else-if="!list.length" class="empty">暂无记录</div>
     </div>
 
     <div v-if="preview" class="lightbox" @click="preview = ''">
@@ -153,10 +154,14 @@ const columns = computed(() => TYPES[type.value].cols);
 
 // 请求序号：快速切换记录类型时，只有最后一次请求的结果生效，避免旧响应覆盖新数据
 let loadSeq = 0;
+const loading = ref(false);
 
 async function load() {
   const seq = ++loadSeq;
   const t = type.value;
+  // 切换类型/日期时立即清空旧数据，避免图片未加载完、接口排队期间仍显示上一类型的记录
+  list.value = [];
+  loading.value = true;
   try {
     const data =
       t === 'inventory_feed' || t === 'inventory_medicine'
@@ -165,6 +170,8 @@ async function load() {
     if (seq === loadSeq) list.value = data;
   } catch (e) {
     if (seq === loadSeq) errToast(e);
+  } finally {
+    if (seq === loadSeq) loading.value = false;
   }
 }
 
