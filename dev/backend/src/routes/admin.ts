@@ -91,6 +91,7 @@ router.put(
       'checkin_radius',
       'work_start_time',
       'work_end_time',
+      'amap_key',
     ];
     for (const k of keys) {
       if (body[k] !== undefined) {

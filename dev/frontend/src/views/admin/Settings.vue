@@ -7,6 +7,7 @@
         :lat="form.checkin_lat"
         :lng="form.checkin_lng"
         :radius="form.checkin_radius"
+        :amap-key="form.amap_key"
         @update:lat="(v) => (form.checkin_lat = String(v))"
         @update:lng="(v) => (form.checkin_lng = String(v))"
         class="mb8"
@@ -35,8 +36,19 @@
           <input v-model="form.work_end_time" type="time" />
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>高德地图 Key（可选，配置后地址搜索可命中高德 POI，如景区/园区名称）</label>
+          <input v-model="form.amap_key" placeholder="Web 服务类型 Key，留空则使用免费公共搜索" />
+        </div>
+      </div>
       <p class="muted mt8">
         💡 可在左上角搜索框输入地址快速定位，也可点击地图或拖拽红色标记选点，经纬度会自动填入并支持手动微调。地图标注语言随浏览器语言自动切换中/英文。
+      </p>
+      <p class="muted mt8">
+        💡 默认搜索使用免费公共接口（OSM 数据），部分国内 POI 可能搜不到。免费申请高德 Key：
+        <a href="https://lbs.amap.com" target="_blank" rel="noopener">lbs.amap.com</a>
+        → 控制台 → 应用管理 → 创建应用 → 添加 Key（服务平台选「Web服务」），填入上方输入框并保存即可。
       </p>
       <div class="form-actions mt16">
         <button class="btn" @click="save">保存设置</button>
@@ -67,7 +79,7 @@ import MapPicker from '../../components/MapPicker.vue';
 
 const form = reactive({
   checkin_lat: '', checkin_lng: '', checkin_radius: '',
-  work_start_time: '09:00', work_end_time: '18:00',
+  work_start_time: '09:00', work_end_time: '18:00', amap_key: '',
 });
 
 async function load() {

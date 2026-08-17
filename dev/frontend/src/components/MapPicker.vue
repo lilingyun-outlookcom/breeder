@@ -27,7 +27,7 @@ import 'leaflet/dist/leaflet.css';
 import { toast } from '../toast';
 
 const props = withDefaults(
-  defineProps<{ lat?: number | string; lng?: number | string; radius?: number | string }>(),
+  defineProps<{ lat?: number | string; lng?: number | string; radius?: number | string; amapKey?: string }>(),
   {}
 );
 const emit = defineEmits<{
@@ -274,14 +274,31 @@ async function geocodeNominatim(q: string): Promise<GeoResult | null> {
   return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
 }
 
-/** 地址搜索（免费地理编码，返回 WGS-84 坐标；国内网络优先 Photon，Nominatim 回退） */
+/** 高德 Web 服务（需在设置中配置 Key；国内 POI 数据最全，返回 GCJ-02 需转 WGS-84） */
+async function geocodeAmap(q: string): Promise<GeoResult | null> {
+  const key = props.amapKey?.trim();
+  if (!key) return null;
+  const data = (await fetchJsonWithTimeout(
+    `https://restapi.amap.com/v3/place/text?key=${encodeURIComponent(key)}` +
+      `&keywords=${encodeURIComponent(q)}&offset=1&page=1`,
+    6000
+  )) as { status?: string; pois?: Array<{ location?: string }> };
+  const loc = data?.pois?.[0]?.location;
+  if (!loc) return null;
+  const [lng, lat] = loc.split(',').map(Number);
+  if (!validLatLng(lat, lng)) return null;
+  const [wlat, wlng] = gcjToWgs(lat, lng);
+  return { lat: wlat, lng: wlng };
+}
+
+/** 地址搜索（免费地理编码，返回 WGS-84 坐标；优先高德[需Key]，再 Photon，Nominatim 回退） */
 async function search() {
   const q = searchText.value.trim();
   if (!q || searching.value) return;
   searching.value = true;
   try {
     let result: GeoResult | null = null;
-    for (const geocode of [geocodePhoton, geocodeNominatim]) {
+    for (const geocode of [geocodeAmap, geocodePhoton, geocodeNominatim]) {
       try {
         const r = await geocode(q);
         if (r && validLatLng(r.lat, r.lng)) {
@@ -381,6 +398,9 @@ watch(
       setMarkerWgs(la, ln);
       const rv = num(props.radius);
       if (rv !== null && rv > 0) drawCircle(rv);
+      // 外部修改坐标（如设置异步加载完成、手动输入）时，同步把视野移过去
+      const [mlat, mlng] = toMap(la, ln);
+      map.setView([mlat, mlng], Math.max(map.getZoom() || 0, 15));
     }
   }
 );
@@ -489,8 +509,17 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
 }
 @media (max-width: 640px) {
+  .search-box {
+    left: 50px; /* 避开左上角缩放控件 */
+    right: 10px;
+  }
   .search-input {
-    width: 140px;
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+  .locate-btn {
+    top: 52px; /* 移到搜索框下方，避免重叠 */
   }
 }
 </style>
