@@ -235,33 +235,77 @@ function locate() {
   );
 }
 
-/** 地址搜索（Nominatim 免费地理编码，返回 WGS-84 坐标） */
+interface GeoResult {
+  lat: number;
+  lng: number;
+}
+
+async function fetchJsonWithTimeout(url: string, timeoutMs: number): Promise<unknown> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Photon（komoot）：免费 OSM 地理编码，无需 key，国内可达，返回 WGS-84 */
+async function geocodePhoton(q: string): Promise<GeoResult | null> {
+  const data = (await fetchJsonWithTimeout(
+    `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`,
+    8000
+  )) as { features?: Array<{ geometry?: { coordinates?: number[] } }> };
+  const coords = data?.features?.[0]?.geometry?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  return { lat: Number(coords[1]), lng: Number(coords[0]) };
+}
+
+/** Nominatim：免费 OSM 地理编码，国内访问不稳定，作为回退 */
+async function geocodeNominatim(q: string): Promise<GeoResult | null> {
+  const data = (await fetchJsonWithTimeout(
+    'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1' +
+      `&accept-language=${isZh ? 'zh-CN' : 'en'}&q=${encodeURIComponent(q)}`,
+    6000
+  )) as Array<{ lat: string; lon: string }>;
+  if (!Array.isArray(data) || !data.length) return null;
+  return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
+}
+
+/** 地址搜索（免费地理编码，返回 WGS-84 坐标；国内网络优先 Photon，Nominatim 回退） */
 async function search() {
   const q = searchText.value.trim();
   if (!q || searching.value) return;
   searching.value = true;
   try {
-    const url =
-      'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1' +
-      `&accept-language=${isZh ? 'zh-CN' : 'en'}&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
-    if (!data.length) {
-      toast(isZh ? '未找到相关地址，请换个关键词重试' : 'Address not found', 'err');
+    let result: GeoResult | null = null;
+    for (const geocode of [geocodePhoton, geocodeNominatim]) {
+      try {
+        const r = await geocode(q);
+        if (r && validLatLng(r.lat, r.lng)) {
+          result = r;
+          break;
+        }
+      } catch {
+        // 当前服务不可用（超时/被拦），尝试下一个
+      }
+    }
+    if (!result) {
+      toast(
+        isZh ? '未找到相关地址或搜索服务暂不可用，请换个关键词重试' : 'Address not found or search unavailable',
+        'err'
+      );
       return;
     }
-    const lat = Number(data[0].lat);
-    const lng = Number(data[0].lon);
-    if (!validLatLng(lat, lng)) return;
+    const { lat, lng } = result;
     setMarkerWgs(lat, lng);
     const rv = num(props.radius);
     if (rv !== null && rv > 0) drawCircle(rv);
     const [mlat, mlng] = toMap(lat, lng);
     map?.setView([mlat, mlng], 16);
     emitPoint(lat, lng);
-  } catch {
-    toast(isZh ? '地址搜索失败，请稍后重试' : 'Search failed, please try again later', 'err');
   } finally {
     searching.value = false;
   }
