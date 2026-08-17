@@ -151,17 +151,20 @@ function fileExt(u: string) {
 
 const columns = computed(() => TYPES[type.value].cols);
 
+// 请求序号：快速切换记录类型时，只有最后一次请求的结果生效，避免旧响应覆盖新数据
+let loadSeq = 0;
+
 async function load() {
+  const seq = ++loadSeq;
+  const t = type.value;
   try {
-    if (type.value === 'inventory_feed' || type.value === 'inventory_medicine') {
-      list.value = await api.get(
-        '/inventory-records' + api.qs({ item_type: type.value === 'inventory_feed' ? 'feed' : 'medicine', date: f.date })
-      );
-    } else {
-      list.value = await api.get('/records/' + type.value + api.qs(f));
-    }
+    const data =
+      t === 'inventory_feed' || t === 'inventory_medicine'
+        ? await api.get('/inventory-records' + api.qs({ item_type: t === 'inventory_feed' ? 'feed' : 'medicine', date: f.date }))
+        : await api.get('/records/' + t + api.qs(f));
+    if (seq === loadSeq) list.value = data;
   } catch (e) {
-    errToast(e);
+    if (seq === loadSeq) errToast(e);
   }
 }
 
