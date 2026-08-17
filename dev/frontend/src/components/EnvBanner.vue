@@ -5,8 +5,8 @@
 <script setup lang="ts">
 // BASE_URL 由构建时注入：/dev/ 或 /prod/
 const isProd = import.meta.env.BASE_URL.includes('/prod/');
-// 仅开发环境：给根元素打标记，全局样式据此让页面顶部让出横幅高度（生产无任何影响）
-if (!isProd) document.documentElement.classList.add('env-dev');
+// 仅开发环境：给 body 打标记，全局样式据此让页面顶部让出横幅高度（生产无任何影响）
+if (!isProd) document.body.classList.add('env-dev');
 </script>
 
 <style scoped>
