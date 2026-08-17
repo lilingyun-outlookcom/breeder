@@ -55,6 +55,9 @@ export async function initSchema(): Promise<void> {
     ['treatment_plans', 'quantity', 'quantity INT NOT NULL DEFAULT 1'],
     ['medication_records', 'quantity', 'quantity DECIMAL(10,2) NULL'],
     ['inventory_records', 'attachments', 'attachments VARCHAR(1000) NOT NULL DEFAULT ""'],
+    ['abnormal_reports', 'report_type', "report_type ENUM('abnormal','death') NOT NULL DEFAULT 'abnormal'"],
+    ['abnormal_reports', 'died_count', 'died_count INT NOT NULL DEFAULT 0'],
+    ['abnormal_reports', 'death_confirmed', 'death_confirmed TINYINT NOT NULL DEFAULT 0'],
   ];
   for (const [table, column, ddl] of migrations) {
     await ensureColumn(table, column, ddl);

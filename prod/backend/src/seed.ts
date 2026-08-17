@@ -35,6 +35,7 @@ export async function seedIfEmpty(): Promise<void> {
     ['checkin_radius', '500', '打卡允许半径(米)'],
     ['work_start_time', '09:00', '上班时间(晚于此签到记为迟到)'],
     ['work_end_time', '18:00', '下班时间(参考)'],
+    ['amap_key', '', '高德地图Web服务Key(可选,用于地图地址搜索命中国内POI)'],
   ];
   for (const [k, v, remark] of settings) {
     await pool.query('INSERT INTO settings (k,v,remark) VALUES (?,?,?)', [k, v, remark]);
