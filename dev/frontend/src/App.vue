@@ -1,8 +1,8 @@
 <template>
   <router-view />
-  <EnvBadge />
+  <EnvBanner />
 </template>
 
 <script setup lang="ts">
-import EnvBadge from './components/EnvBadge.vue';
+import EnvBanner from './components/EnvBanner.vue';
 </script>

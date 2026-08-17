@@ -880,3 +880,22 @@ table.tbl {
   border-radius: 8px;
   object-fit: cover;
 }
+
+/* ---------- 开发环境顶部横幅让位（仅 html.env-dev 生效，生产无此标记） ---------- */
+/* 横幅固定占顶 28px：页面内容整体下移，sticky/fixed 的头部同步下移，避免被横幅遮挡 */
+body.env-dev {
+  padding-top: 28px;
+}
+body.env-dev .admin-side {
+  top: 28px;
+  height: calc(100vh - 28px);
+}
+body.env-dev .admin-mask {
+  top: 28px;
+}
+body.env-dev .mobile-top {
+  top: 28px;
+}
+body.env-dev .login-page {
+  min-height: calc(100vh - 28px);
+}
