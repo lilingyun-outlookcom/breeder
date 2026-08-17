@@ -36,7 +36,7 @@
         </div>
       </div>
       <p class="muted mt8">
-        💡 在地图上点击或拖拽红色标记即可选点，经纬度会自动填入，也可手动微调。
+        💡 可在左上角搜索框输入地址快速定位，也可点击地图或拖拽红色标记选点，经纬度会自动填入并支持手动微调。地图标注语言随浏览器语言自动切换中/英文。
       </p>
       <div class="form-actions mt16">
         <button class="btn" @click="save">保存设置</button>

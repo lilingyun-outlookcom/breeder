@@ -1,9 +1,21 @@
 <template>
   <div class="map-picker">
     <div ref="mapEl" class="map-picker-map"></div>
-    <button class="locate-btn" :disabled="locating" @click="locate" title="定位到当前位置">
-      <span v-if="!locating">📍 定位到当前位置</span>
-      <span v-else>定位中…</span>
+    <div class="search-box">
+      <input
+        v-model="searchText"
+        class="search-input"
+        type="text"
+        :placeholder="isZh ? '搜索地址，如：广州动物园' : 'Search address…'"
+        @keyup.enter="search"
+      />
+      <button class="search-btn" :disabled="searching" @click="search">
+        {{ searching ? (isZh ? '搜索中…' : 'Searching…') : isZh ? '搜索' : 'Search' }}
+      </button>
+    </div>
+    <button class="locate-btn" :disabled="locating" @click="locate" :title="isZh ? '定位到当前位置' : 'Locate me'">
+      <span v-if="!locating">📍 {{ isZh ? '定位到当前位置' : 'Locate me' }}</span>
+      <span v-else>{{ isZh ? '定位中…' : 'Locating…' }}</span>
     </button>
   </div>
 </template>
@@ -23,15 +35,24 @@ const emit = defineEmits<{
   (e: 'update:lng', v: number): void;
 }>();
 
+// 根据浏览器语言自动切换地图标注语言（中文 / English）
+const isZh = (navigator.language || 'zh').toLowerCase().startsWith('zh');
+
 const mapEl = ref<HTMLDivElement | null>(null);
 const locating = ref(false);
+const searchText = ref('');
+const searching = ref(false);
 let map: L.Map | null = null;
 let marker: L.Marker | null = null;
 let circle: L.Circle | null = null;
 let tiles: L.TileLayer[] = [];
 let tileIdx = 0;
+// 高德瓦片为 GCJ-02 坐标系，仅在激活时做坐标纠偏；回退到 CartoDB/OSM 时为 WGS-84
+let amapActive = false;
+// 当前选点（始终保存 WGS-84 坐标，与手机定位/后端一致）
+let currentWgs: { lat: number; lng: number } | null = null;
 
-// 默认视野（广州）
+// 默认视野（广州，WGS-84）
 const DEFAULT = { lat: 23.13, lng: 113.26 };
 
 // 自定义 marker 图标：避免 Leaflet 默认 PNG 图标在 Vite 打包下的路径问题
@@ -56,21 +77,86 @@ function validLatLng(lat: number, lng: number) {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
-function setMarker(lat: number, lng: number) {
+/* ---- GCJ-02（高德）<-> WGS-84 坐标纠偏 ---- */
+const GCJ_PI = 3.1415926535897932384626;
+const GCJ_A = 6378245.0;
+const GCJ_EE = 0.00669342162296594323;
+
+function outOfChina(lat: number, lng: number) {
+  return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
+
+function transformLat(x: number, y: number) {
+  let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += ((20.0 * Math.sin(6.0 * x * GCJ_PI) + 20.0 * Math.sin(2.0 * x * GCJ_PI)) * 2.0) / 3.0;
+  ret += ((20.0 * Math.sin(y * GCJ_PI) + 40.0 * Math.sin((y / 3.0) * GCJ_PI)) * 2.0) / 3.0;
+  ret += ((160.0 * Math.sin((y / 12.0) * GCJ_PI) + 320 * Math.sin((y * GCJ_PI) / 30.0)) * 2.0) / 3.0;
+  return ret;
+}
+
+function transformLng(x: number, y: number) {
+  let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += ((20.0 * Math.sin(6.0 * x * GCJ_PI) + 20.0 * Math.sin(2.0 * x * GCJ_PI)) * 2.0) / 3.0;
+  ret += ((20.0 * Math.sin(x * GCJ_PI) + 40.0 * Math.sin((x / 3.0) * GCJ_PI)) * 2.0) / 3.0;
+  ret += ((150.0 * Math.sin((x / 12.0) * GCJ_PI) + 300.0 * Math.sin((x / 30.0) * GCJ_PI)) * 2.0) / 3.0;
+  return ret;
+}
+
+function wgsToGcj(lat: number, lng: number): [number, number] {
+  if (outOfChina(lat, lng)) return [lat, lng];
+  let dLat = transformLat(lng - 105.0, lat - 35.0);
+  let dLng = transformLng(lng - 105.0, lat - 35.0);
+  const radLat = (lat / 180.0) * GCJ_PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - GCJ_EE * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / (((GCJ_A * (1 - GCJ_EE)) / (magic * sqrtMagic)) * GCJ_PI);
+  dLng = (dLng * 180.0) / ((GCJ_A / sqrtMagic) * Math.cos(radLat) * GCJ_PI);
+  return [lat + dLat, lng + dLng];
+}
+
+function gcjToWgs(lat: number, lng: number): [number, number] {
+  if (outOfChina(lat, lng)) return [lat, lng];
+  const [gLat, gLng] = wgsToGcj(lat, lng);
+  return [lat * 2 - gLat, lng * 2 - gLng];
+}
+
+/** WGS-84 -> 地图显示坐标（高德瓦片时转 GCJ-02） */
+function toMap(lat: number, lng: number): [number, number] {
+  return amapActive ? wgsToGcj(lat, lng) : [lat, lng];
+}
+
+/** 地图显示坐标 -> WGS-84 */
+function fromMap(lat: number, lng: number): [number, number] {
+  return amapActive ? gcjToWgs(lat, lng) : [lat, lng];
+}
+/* ---- 坐标纠偏结束 ---- */
+
+function emitPoint(lat: number, lng: number) {
+  emit('update:lat', round(lat));
+  emit('update:lng', round(lng));
+}
+
+/** 以 WGS-84 坐标放置/移动标记（显示时按需纠偏） */
+function setMarkerWgs(lat: number, lng: number) {
   if (!map) return;
+  currentWgs = { lat, lng };
+  const [mlat, mlng] = toMap(lat, lng);
   if (!marker) {
-    marker = L.marker([lat, lng], { icon: divIcon, draggable: true }).addTo(map);
+    marker = L.marker([mlat, mlng], { icon: divIcon, draggable: true }).addTo(map);
     marker.on('dragend', () => {
       const p = marker!.getLatLng();
-      emit('update:lat', round(p.lat));
-      emit('update:lng', round(p.lng));
+      const [wlat, wlng] = fromMap(p.lat, p.lng);
+      currentWgs = { lat: wlat, lng: wlng };
+      emitPoint(wlat, wlng);
     });
   } else {
-    marker.setLatLng([lat, lng]);
+    marker.setLatLng([mlat, mlng]);
   }
 }
 
 function clearMarker() {
+  currentWgs = null;
   if (marker) {
     marker.remove();
     marker = null;
@@ -83,10 +169,11 @@ function clearMarker() {
 
 function drawCircle(radius: number) {
   if (!map) return;
-  const p = marker?.getLatLng();
-  const lat = p ? p.lat : num(props.lat);
-  const lng = p ? p.lng : num(props.lng);
-  if (lat === null || lng === null || !validLatLng(lat, lng)) return;
+  const wlat = currentWgs?.lat ?? num(props.lat);
+  const wlng = currentWgs?.lng ?? num(props.lng);
+  if (wlat === null || wlat === undefined || wlng === null || wlng === undefined) return;
+  if (!validLatLng(wlat, wlng)) return;
+  const [lat, lng] = toMap(wlat, wlng);
   if (!circle) {
     circle = L.circle([lat, lng], {
       radius,
@@ -105,12 +192,19 @@ function addTile(idx: number) {
   if (!map || !tiles[idx]) return;
   tiles[idx].addTo(map);
   tileIdx = idx;
+  amapActive = idx === 0;
+  // 瓦片源切换导致坐标系变化（GCJ-02 <-> WGS-84），同步纠正标记/范围圈位置
+  if (currentWgs) {
+    setMarkerWgs(currentWgs.lat, currentWgs.lng);
+    const rv = num(props.radius);
+    if (rv !== null && rv > 0) drawCircle(rv);
+  }
 }
 
 /** 定位到当前位置：成功后移动标记并回填坐标 */
 function locate() {
   if (!navigator.geolocation) {
-    toast('当前浏览器不支持定位', 'err');
+    toast(isZh ? '当前浏览器不支持定位' : 'Geolocation is not supported', 'err');
     return;
   }
   if (locating.value) return;
@@ -119,17 +213,18 @@ function locate() {
     (pos) => {
       locating.value = false;
       const { latitude, longitude } = pos.coords;
-      setMarker(latitude, longitude);
+      setMarkerWgs(latitude, longitude);
       const rv = num(props.radius);
       if (rv !== null && rv > 0) drawCircle(rv);
-      map?.setView([latitude, longitude], 16);
-      emit('update:lat', round(latitude));
-      emit('update:lng', round(longitude));
+      const [mlat, mlng] = toMap(latitude, longitude);
+      map?.setView([mlat, mlng], 16);
+      emitPoint(latitude, longitude);
     },
     (err) => {
       locating.value = false;
-      const msg =
-        err.code === err.PERMISSION_DENIED
+      const msg = !isZh
+        ? 'Unable to get current location'
+        : err.code === err.PERMISSION_DENIED
           ? '已拒绝定位授权，请在浏览器设置中允许定位后重试'
           : err.code === err.TIMEOUT
             ? '定位超时，请重试'
@@ -140,15 +235,54 @@ function locate() {
   );
 }
 
+/** 地址搜索（Nominatim 免费地理编码，返回 WGS-84 坐标） */
+async function search() {
+  const q = searchText.value.trim();
+  if (!q || searching.value) return;
+  searching.value = true;
+  try {
+    const url =
+      'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1' +
+      `&accept-language=${isZh ? 'zh-CN' : 'en'}&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+    if (!data.length) {
+      toast(isZh ? '未找到相关地址，请换个关键词重试' : 'Address not found', 'err');
+      return;
+    }
+    const lat = Number(data[0].lat);
+    const lng = Number(data[0].lon);
+    if (!validLatLng(lat, lng)) return;
+    setMarkerWgs(lat, lng);
+    const rv = num(props.radius);
+    if (rv !== null && rv > 0) drawCircle(rv);
+    const [mlat, mlng] = toMap(lat, lng);
+    map?.setView([mlat, mlng], 16);
+    emitPoint(lat, lng);
+  } catch {
+    toast(isZh ? '地址搜索失败，请稍后重试' : 'Search failed, please try again later', 'err');
+  } finally {
+    searching.value = false;
+  }
+}
+
 onMounted(() => {
   if (!mapEl.value) return;
   map = L.map(mapEl.value, { attributionControl: true });
   const lat = num(props.lat) ?? DEFAULT.lat;
   const lng = num(props.lng) ?? DEFAULT.lng;
-  map.setView([lat, lng], validLatLng(lat, lng) ? 15 : 12);
 
-  // 瓦片源：CartoDB 为主，失败自动回退 OSM（均免费、无需 key）
+  // 瓦片源：高德（支持中英文标注切换）为主，失败自动回退 CartoDB / OSM（均免费、无需 key）
   tiles = [
+    L.tileLayer(
+      `https://webrd0{s}.is.autonavi.com/appmaptile?lang=${isZh ? 'zh_cn' : 'en'}&size=1&scale=1&style=8&x={x}&y={y}&z={z}`,
+      {
+        subdomains: '1234',
+        maxZoom: 18,
+        attribution: '&copy; 高德地图 AutoNavi',
+      }
+    ),
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
       maxZoom: 19,
@@ -160,32 +294,33 @@ onMounted(() => {
     }),
   ];
   addTile(0);
+  const [vlat, vlng] = toMap(lat, lng);
+  map.setView([vlat, vlng], validLatLng(lat, lng) ? 15 : 12);
   map.on('tileerror', () => {
     const next = (tileIdx + 1) % tiles.length;
     tiles[tileIdx]?.remove();
     addTile(next);
   });
 
-  // 点击地图选点
+  // 点击地图选点（显示坐标转回 WGS-84 存储）
   map.on('click', (e: L.LeafletMouseEvent) => {
-    const { lat: la, lng: ln } = e.latlng;
-    setMarker(la, ln);
+    const [wlat, wlng] = fromMap(e.latlng.lat, e.latlng.lng);
+    setMarkerWgs(wlat, wlng);
     const rv = num(props.radius);
     if (rv !== null && rv > 0) drawCircle(rv);
-    emit('update:lat', round(la));
-    emit('update:lng', round(ln));
+    emitPoint(wlat, wlng);
   });
 
   // 初始坐标
   if (validLatLng(lat, lng)) {
-    setMarker(lat, lng);
+    setMarkerWgs(lat, lng);
     const rv = num(props.radius);
     if (rv !== null && rv > 0) drawCircle(rv);
   }
   setTimeout(() => map?.invalidateSize(), 100);
 });
 
-// 输入框手动微调时同步地图 marker / 圆
+// 输入框手动微调时同步地图 marker / 圆（props 为 WGS-84）
 watch(
   () => [props.lat, props.lng] as const,
   ([lat, lng]) => {
@@ -196,10 +331,10 @@ watch(
       clearMarker();
       return;
     }
-    const cur = marker?.getLatLng();
+    const cur = currentWgs;
     const moved = !cur || Math.abs(cur.lat - la) > 1e-6 || Math.abs(cur.lng - ln) > 1e-6;
     if (moved) {
-      setMarker(la, ln);
+      setMarkerWgs(la, ln);
       const rv = num(props.radius);
       if (rv !== null && rv > 0) drawCircle(rv);
     }
@@ -231,6 +366,47 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   overflow: hidden;
   z-index: 0;
+}
+.search-box {
+  position: absolute;
+  top: 10px;
+  left: 50px;
+  z-index: 1001;
+  display: flex;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+.search-input {
+  width: 200px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px solid #d9d9d9;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  outline: none;
+}
+.search-input:focus {
+  border-color: #1677ff;
+}
+.search-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #fff;
+  background: #1677ff;
+  border: 1px solid #1677ff;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.search-btn:hover:not(:disabled) {
+  background: #4096ff;
+}
+.search-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .locate-btn {
   position: absolute;
@@ -267,5 +443,10 @@ onBeforeUnmount(() => {
   background: #ff4d4f;
   border: 3px solid #fff;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+@media (max-width: 640px) {
+  .search-input {
+    width: 140px;
+  }
 }
 </style>
